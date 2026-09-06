@@ -23,6 +23,13 @@ add_executable(romanian_whist_engine_tests
     LowRiskStrategyTests.cpp
     AiMoveProviderTests.cpp
     ReadmeQuickStartTests.cpp
+    CardMaskTests.cpp
+    EvaluatorTests.cpp
+    ReckonerTrackerTests.cpp
+    SamplerTests.cpp
+    BasePolicyTests.cpp
+    ReckonerStrategyTests.cpp
+    ReckonerTournamentTests.cpp
 )
 
 target_link_libraries(romanian_whist_engine_tests PRIVATE

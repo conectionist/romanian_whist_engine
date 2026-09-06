@@ -22,6 +22,12 @@ add_library(romanian_whist_engine STATIC
     src/strategies/TrickHeuristics.cpp
     src/strategies/LowRiskStrategy.cpp
     src/strategies/DuckingStrategy.cpp
+    src/strategies/reckoner/Evaluator.cpp
+    src/strategies/reckoner/ReckonerTracker.cpp
+    src/strategies/reckoner/Sampler.cpp
+    src/strategies/reckoner/BasePolicy.cpp
+    src/strategies/reckoner/RolloutEngine.cpp
+    src/strategies/ReckonerStrategy.cpp
 )
 
 # Consumers link against this alias, so the name is identical whether the engine
