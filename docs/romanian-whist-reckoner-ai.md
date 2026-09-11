@@ -676,3 +676,56 @@ Implementation notes:
 - Strategy-fusion check: if the AI starts making "hero" plays that only work when it knows the
   deal, lower `K_play`'s reliance by raising `MARGIN`, or make sure the base policy inside
   rollouts is really information-limited (no peeking at sampled hands).
+
+---
+
+## 11. Known limitations
+
+Two gaps between this design and the shipped implementation, both open as issues rather than
+fixed. Neither is reachable from ordinary play; both are about what happens when the tracker
+stops describing the table actually being played.
+
+### The replica is the authority, not the argument
+
+The engine hands `getBestChoice()` a `PlayContext` describing the real position — the lead suit,
+the trump, the hand — and the decision is then computed from the tracker instead.
+`RolloutEngine::choosePlay()` receives no `PlayContext` at all: it reconstructs the lead suit from
+`tracker.currentTrickCards`, the trump from `tracker.trumpSuit` and the deck profile from
+`tracker.playerCount`. So every card it proposes is legal with respect to a *replica* of the
+position, and any way the replica can drift from the real one — a callback that never arrived, a
+seat resolved wrongly, a bug in §1 — is a decision about a table that does not exist.
+
+Since 4.2.0 that is survivable rather than silent: `getBestChoice()` filters the answer through
+`CardValidator` and returns a legal card regardless, and a hand the tracker's deck profile cannot
+encode is caught rather than thrown. But the strategy still *reasons* about the wrong position and
+is then overruled, so what it plays in that state is a fallback, not a good card.
+
+Closing it properly means passing the position in rather than reconstructing it, which is blocked
+on where `playerCount` should come from — it is in neither `PlayContext` nor `BetContext`, and
+adding it there is a public-surface decision affecting every `IStrategy` implementer.
+See [issue #17](https://github.com/conectionist/romanian_whist_engine/issues/17).
+
+### The rollout does not check its own base policy's sentinel
+
+`BasePolicy::chooseCard()` returns `INVALID_CARD_ID` for a seat with no legal card, and
+`RolloutEngine::rollout()` uses the value without testing it — passing 255 to `cardBit()` (a
+255-bit shift) and, through `cardSuit()`, indexing `suitMasks[31]`. Both are undefined behaviour
+and UBSan reports them.
+
+It takes a sample degenerate enough to leave a simulated seat with nothing legal, which the
+observer callbacks do not produce on their own: the `[reckoner]` suite plays full games at Easy,
+Hard and Brutal with zero UBSan errors. It matters because it is the layer *below* the guard
+above — `getBestChoice()` can contain a bad answer and can contain an exception, but it cannot
+contain undefined behaviour.
+
+The fix is not just a null check: what a rollout should *do* with a dead seat (abandon the sample,
+pass, score the trick differently) biases the estimator differently in each case, and the only
+play-strength check in the suite is the tournament assertion, which a subtle bias would not turn
+red. See [issue #16](https://github.com/conectionist/romanian_whist_engine/issues/16).
+
+### What the suite does about them today
+
+`tests/ReckonerRobustnessTests.cpp` covers the drift cases at the **Easy** preset specifically,
+because `K_play = 0` means Easy answers from the base policy and never enters the rollout. That
+keeps the suite UBSan-clean at the cost of real coverage: no test currently exercises drift
+*through* the rollout, which is the path Hard and Brutal take. That coverage returns with #16.
