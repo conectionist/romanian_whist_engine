@@ -46,6 +46,16 @@ struct OpponentModel
 class ReckonerTracker
 {
 public:
+    // The width of every per-seat array below, and the engine's own ceiling on a
+    // table (GameEngine::start() rejects anything outside 2..6 by name). Named
+    // because initRound() takes the seat count as an argument and has to clamp it:
+    // the arrays are indexed by a loop bounded by playerCount, so a count larger
+    // than this would be a buffer overflow rather than a bad estimate.
+    static constexpr unsigned int MaxPlayers = 6;
+
+    // FOUR IS AN INITIALISER, NOT AN ASSUMPTION - initRound() overwrites it with
+    // the real seat count on every round. It matters only until then, which is the
+    // window `roundInitialised` below exists to close.
     unsigned int playerCount = 4;
     unsigned int roundTrickCount = 1; // R
     unsigned int mySeat = 0;
@@ -77,6 +87,19 @@ public:
 
     // Configuration
     float rankGapConfScale = 1.0f;
+
+    // FALSE UNTIL initRound() HAS RUN, and the whole of this tracker is
+    // meaningless until it has: playerCount is still 4, trumpSuit is empty, live
+    // is 0, and every per-seat array is zeroed. A strategy that decides from that
+    // state is not playing badly, it is reading a table that does not exist - and
+    // because the fields all hold plausible values rather than obviously wrong
+    // ones, nothing downstream notices.
+    //
+    // BOTH FEEDS SET IT, which is why the flag lives here rather than on the
+    // strategy: initRound() is the single funnel for the IGameObserver callback
+    // (onRoundStarted) and for the standalone hook (onRoundStart), so a tracker
+    // driven either way answers this honestly.
+    bool roundInitialised = false;
 
     EvalContext initialContext{};
 

@@ -9,11 +9,24 @@ namespace romanian_whist::reckoner
 void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int mySeatIdx,
                                 unsigned int openerSeat, std::optional<Card> trump)
 {
-    playerCount = n;
+    // CLAMPED TO THE ARRAY WIDTH, not to the rules. GameEngine::start() already
+    // rejects any table outside 2..6 by name, so this cannot bite through the
+    // engine today - but every per-seat array below is written by a loop bounded
+    // by playerCount, so the cost of it ever biting is a buffer overflow rather
+    // than a wrong answer. GCC sees the same thing at -O2 and says so
+    // (-Wstringop-overflow on the voidMask write further down).
+    //
+    // Seats are clamped the same way for the same reason: mySeat and opener index
+    // those arrays directly.
+    playerCount = std::min(n, MaxPlayers);
     roundTrickCount = r;
-    mySeat = mySeatIdx;
-    opener = openerSeat;
-    currentTrickLeader = openerSeat;
+    mySeat = std::min(mySeatIdx, MaxPlayers - 1);
+    opener = std::min(openerSeat, MaxPlayers - 1);
+    currentTrickLeader = opener;
+
+    // THE TRACKER IS NOW WORTH READING, which nothing before this point was. See
+    // ReckonerTracker::roundInitialised for what an unset one costs.
+    roundInitialised = true;
 
     const auto& profile = getDeckProfile(playerCount);
 
@@ -35,10 +48,24 @@ void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int myS
         live &= ~cardBit(*trumpCard);
     }
 
-    for(unsigned int p = 0; p < playerCount; ++p)
+    // EVERY SLOT, NOT ONLY THE SEATS IN PLAY. Two reasons, and the second is the
+    // one that made this a change rather than a tidy-up:
+    //
+    //   * a tail left behind is a real hazard the moment a tracker outlives one
+    //     table size - reset only up to playerCount, seats 4 and 5 keep the
+    //     previous round's bids and hand sizes, and anything that ever reads them
+    //     (a sampler bug, a wrong seat) sees a plausible stale number rather than
+    //     an empty one; and
+    //   * bounded by the ARRAY rather than by a count, this is provably in range,
+    //     which the loop it replaced was not. GCC said so at -O2
+    //     (-Wstringop-overflow, "writing 1 byte into a region of size 0"), and a
+    //     warning in a per-seat write loop is not one to carry.
+    for(unsigned int p = 0; p < MaxPlayers; ++p)
     {
+        const bool seated = p < playerCount;
+
         playedBy[p] = 0ULL;
-        handSize[p] = roundTrickCount;
+        handSize[p] = seated ? roundTrickCount : 0;
         voidMask[p] = 0;
         bids[p] = UNBID;
         won[p] = 0;
@@ -51,9 +78,9 @@ void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int myS
     // Compute initial context for o's starting hand evaluation
     initialContext.playerCount = playerCount;
     initialContext.live = live;
-    for(unsigned int p = 0; p < playerCount; ++p)
+    for(unsigned int p = 0; p < MaxPlayers; ++p)
     {
-        initialContext.handSize[p] = roundTrickCount;
+        initialContext.handSize[p] = (p < playerCount) ? roundTrickCount : 0;
         initialContext.voidMask[p] = 0;
     }
     initialContext.trumpSuit = trumpSuit;

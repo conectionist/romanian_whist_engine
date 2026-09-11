@@ -58,6 +58,13 @@ public:
     void onCardPlayed(unsigned int seat, const Card& card);
     void onTrickWon(unsigned int winner);
     void onRoundEnd(const std::vector<int>& roundScores, const std::vector<int>& runningTotals);
+
+private:
+    // Throws std::logic_error unless the tracker has seen a round start - i.e.
+    // unless this strategy was actually registered as an observer. Called at the
+    // top of both decisions; see the definition for why it is loud rather than
+    // defensive. `decision` names the caller, so the message says which.
+    void requireTracker(const char* decision) const;
 };
 
 SeatSetup makeReckonerSeat(const std::string& name, GameEngine& engine,
