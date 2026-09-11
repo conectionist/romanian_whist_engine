@@ -1,6 +1,6 @@
 # AI strategies
 
-The engine ships four `IStrategy` implementations. This document covers what each one
+The engine ships five `IStrategy` implementations. This document covers what each one
 does, how they compare, and where they fall down. For the interface itself, see
 [README.md](README.md#supplying-moves--imoveprovider).
 
@@ -10,6 +10,14 @@ does, how they compare, and where they fall down. For the interface itself, see
 | [`FirstCardStrategy`](#firstcardstrategy) | `strategies/FirstCardStrategy.h` | 0, or 1 when 0 is barred | The first legal card in hand order |
 | [`DuckingStrategy`](#duckingstrategy) | `strategies/DuckingStrategy.h` | 0, come what may | Sheds its highest cards whenever they cannot win |
 | [`LowRiskStrategy`](#lowriskstrategy) | `strategies/LowRiskStrategy.h` | The tricks its hand will take anyway — usually 0 | Wins cheaply while it owes tricks, then ducks |
+| [`ReckonerStrategy`](#reckonerstrategy) | `strategies/ReckonerStrategy.h` | What its sampled deals say the hand will take | Searches imagined deals, and plays to hit its bid or break yours |
+
+The first four are the subject of most of this document: they are stateless, they decide
+from the context they are handed, and they are short enough to read in one sitting. The
+Reckoner is none of those things — it remembers the whole round, it searches, and it has to
+be **registered as an observer** to work at all. Its section is [below](#reckonerstrategy),
+and its design is documented separately in
+[romanian-whist-reckoner-ai.md](romanian-whist-reckoner-ai.md).
 
 ---
 
@@ -93,6 +101,61 @@ not possible, so 0 becomes 1 — and a round always has at least one trick, so 1
 **Playing** — while `tricksWon < bet` it uses `chooseWinningCard`; once the bid is met or
 overshot, every further trick is a penalty, so it switches to `chooseDuckingCard` for the
 rest of the round.
+
+---
+
+## ReckonerStrategy
+
+The strong one, and the only one built differently from the rest. Where the four above
+decide from the `PlayContext` in front of them, the Reckoner keeps a model of the whole
+round — every card played, who has shown void in which suit, what everyone bid — and
+searches over deals consistent with it before each decision.
+
+Four presets, which differ only in the numbers behind them:
+
+| Preset | Memory | Deals sampled per card | Notable |
+|---|---|---|---|
+| `ReckonerKnobs::easy()` | the current trick only | none | Plays a random legal card 15% of the time |
+| `ReckonerKnobs::medium()` | the full round | 60 | Beats `LowRiskStrategy` clearly |
+| `ReckonerKnobs::hard()` | the full round | 200 | Weighs breaking the score leader's bid at double |
+| `ReckonerKnobs::brutal()` | the full round | 400 | Solves the last two tricks exactly |
+
+Every knob behind them is tabulated in
+[romanian-whist-reckoner-ai.md](romanian-whist-reckoner-ai.md) §9. `Easy` samples nothing,
+so it costs about what `LowRiskStrategy` costs; `Brutal` is the only strategy here whose
+decisions are measurable in milliseconds rather than microseconds.
+
+### It has to be registered as an observer
+
+This is the one thing to get right, and the type system cannot help you with it.
+`ReckonerStrategy` derives from `IStrategy` **and** `IGameObserver`. Everything it plays
+from arrives through the observer callbacks, and `onGameStarted` is also where it resolves
+its own seat by matching its name against the table — so it must reach the engine before
+`start()`, not merely before `run()`.
+
+`makeReckonerSeat()` does the whole dance and is what you should use:
+
+```cpp
+SeatSetup seat = makeReckonerSeat("Ana", engine, reckoner::ReckonerKnobs::hard(), seed);
+```
+
+If you build one by hand instead, all three steps are yours: `setPlayerName()`,
+`engine.addObserver()` before `engine.start()`, and keeping the engine and the seat
+together. Skip the registration and both decisions throw `std::logic_error` naming the
+omission — deliberately, because the alternative is a bot that plays legal, weak cards
+forever out of a memory it never received, with nothing anywhere to say why.
+
+A client that builds seats away from its engine — a GUI whose setup screen runs on another
+thread, say — has to carry the observer pointer to wherever the engine is constructed and
+register it there. That is a real constraint on such clients and not merely a convention.
+
+### Seeding
+
+Like `RandomCardStrategy`, it draws: the deal sampler, the `Easy` preset's random-card roll
+and the bid noise all come from one `std::mt19937` seeded once at construction. Pass a seed
+for a reproducible game; without one it takes `std::random_device` once. Note that
+reproducibility holds for the same deal against the same opponents — the generator is
+consumed per decision, so a different card upstream shifts everything after it.
 
 ---
 
