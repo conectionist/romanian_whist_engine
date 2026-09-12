@@ -50,7 +50,7 @@ struct PrePlayState
 // and a cross-round opponent model; Cyborg adds neither and wants exactly this.
 //
 // Every field is public and there is no engine handle, no RNG and no
-// configuration, so it is cheap to construct, trivial to copy, and testable by
+// configuration, so it is cheap to construct, cheap to copy, and testable by
 // driving it with bare method calls - which is how tests/ReckonerTrackerTests
 // and tests/CyborgMemoryTests both use it.
 //
@@ -74,14 +74,35 @@ public:
     std::array<Mask, 6> playedBy{};
     std::array<unsigned int, 6> handSize{};
     std::array<std::uint8_t, 6> voidMask{}; // bit s is (1 << s)
-    std::array<int, 6> bids{};              // UNBID, or 0..R
     std::array<unsigned int, 6> won{};
+
+    // Not `{}` like its neighbours, and that is the whole point: zero is a real
+    // bid, so a value-initialised array would read as "all six seats bid 0"
+    // rather than "nobody has bid", and bidsPlaced() would answer 4 on a
+    // default-constructed object - the worst possible wrong answer for a seat
+    // about to bid. The neighbours above are safe because zero is their correct
+    // empty value (no cards played, no voids proved, no tricks won).
+    std::array<int, 6> bids{UNBID, UNBID, UNBID, UNBID, UNBID, UNBID}; // UNBID, or 0..R
 
     std::vector<CompletedTrick> completedTricks;
     std::vector<TrickCard> currentTrickCards;
     unsigned int currentTrickLeader = 0;
 
     RoundMemory() = default;
+
+    // Virtual because ReckonerTracker derives from this publicly and Cyborg will
+    // too. Nothing owns a RoundMemory through a base pointer today, so this is
+    // not fixing a live bug - it is making the one that a future
+    // `unique_ptr<RoundMemory>` would otherwise introduce impossible.
+    //
+    // The other five are defaulted only because declaring the destructor
+    // suppresses the implicit move operations, and this class holds two vectors.
+    // Without them every move here would silently become a copy.
+    virtual ~RoundMemory() = default;
+    RoundMemory(const RoundMemory&) = default;
+    RoundMemory& operator=(const RoundMemory&) = default;
+    RoundMemory(RoundMemory&&) = default;
+    RoundMemory& operator=(RoundMemory&&) = default;
 
     // Resets everything round-scoped. The turned-up trump is removed from
     // `live` - it is dead, nobody holds it, and its rank is exactly what makes

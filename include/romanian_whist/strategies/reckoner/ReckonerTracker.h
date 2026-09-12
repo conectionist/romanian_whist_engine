@@ -45,9 +45,11 @@ struct OpponentModel
 // is the part worth sharing - see common::RoundMemory.
 //
 // initRound() and recordCardPlayed() extend their base versions rather than
-// override them: they are not virtual, because nothing here is ever reached
-// through a common::RoundMemory& and a vtable would buy nothing. Callers hold a
-// ReckonerTracker, so they get these.
+// override them - they hide the base name and call it explicitly. They are not
+// virtual because nothing here is ever reached through a common::RoundMemory&:
+// callers hold a ReckonerTracker by value, so they get these. (The base does
+// have a virtual destructor, but that guards against a future owner holding one
+// by base pointer; it is not an invitation to dispatch these two.)
 class ReckonerTracker : public common::RoundMemory
 {
 public:
@@ -58,6 +60,8 @@ public:
     // Kept across the whole game, unlike everything in the base.
     std::array<OpponentModel, 6> opponentModels{};
 
+    // `{}` is correct here, unlike the base's `bids`: zero is the right score
+    // before a game has been scored, so there is nothing to distinguish from.
     std::array<int, 6> totalScores{};
     unsigned int scoreLeaderSeat = 0;
     unsigned int myConsecutiveWins = 0;

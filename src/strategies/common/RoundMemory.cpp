@@ -32,13 +32,20 @@ void RoundMemory::initRound(unsigned int n, unsigned int r, unsigned int mySeatI
         live &= ~cardBit(*trumpCard);
     }
 
+    // All six, not just the seats in play: the same RoundMemory can be reused
+    // for a smaller table, and a partial reset would leave the seats above
+    // playerCount holding a previous round's bids. Every consumer loops to
+    // playerCount today, so that stale tail is unreachable - but these are
+    // public members, and the invariant should not depend on who is reading.
+    playedBy.fill(0ULL);
+    handSize.fill(0);
+    voidMask.fill(0);
+    bids.fill(UNBID);
+    won.fill(0);
+
     for(unsigned int p = 0; p < playerCount; ++p)
     {
-        playedBy[p] = 0ULL;
         handSize[p] = roundTrickCount;
-        voidMask[p] = 0;
-        bids[p] = UNBID;
-        won[p] = 0;
     }
 
     completedTricks.clear();
