@@ -57,7 +57,7 @@ the top half of those ranks — exactly `playerCount` of them per suit.**
 | 5 | A K Q J 10 … 5 | A K Q J 10 | 9 8 7 6 5 |
 | 6 | A K Q J 10 … 3 | A K Q J 10 9 | 8 7 6 5 4 3 |
 
-The engine already computes the offset this needs. `reckoner::DeckProfile` (`strategies/reckoner/CardMask.h`)
+The engine already computes the offset this needs. `common::DeckProfile` (`strategies/common/CardMask.h`)
 carries `ranksPerSuit = 2N` and `minRankInt = 1 + 2·(6 − N)`, and `cardRank(cardToId(c, N), 2N)`
 returns the 0-based rank index within the deck. So:
 
@@ -230,8 +230,8 @@ pLeadWins(c):
 ```
 
 `hyper0(k, n, h)` — "P that `h` cards drawn without replacement from `n` contain none of the `k`
-marked ones" — is already implemented and tested at `reckoner::hyper0`
-(`strategies/reckoner/Evaluator.h`, `tests/EvaluatorTests.cpp`).
+marked ones" — is already implemented and tested at `common::hyper0`
+(`strategies/common/Hypergeometric.h`, `tests/EvaluatorTests.cpp`).
 
 Three things to understand about this function, because it is the load-bearing one:
 
@@ -885,8 +885,14 @@ whose entire job is to keep the old spellings alive:
 They exist because without them, moving three files would have meant editing every `.cpp` under
 `strategies/reckoner/` plus `tests/ReckonerTrackerTests.cpp` — turning a mechanical move into a
 diff nobody could review against a tournament test that only asserts one average beats another.
-With them, the move touched eight files and the pinned scores in
-`tests/ReckonerStrategyTests.cpp` proved it changed no behaviour.
+With them, the move touched eight files.
+
+That it changed no behaviour was established afterwards, and it is worth recording how, because the
+pinned scores in `tests/ReckonerStrategyTests.cpp` could not do it on their own: they were added by
+the extraction commit itself, so they only ever pinned post-refactor output. The check that counts
+was run separately — the pinned `TEST_CASE` was ported onto a `master` worktree predating the move
+and built there, and all six vectors came back identical on Linux/GCC/Release. The portable state
+pin in `tests/CyborgMemoryTests.cpp` covers the same ground going forward, on every platform.
 
 The cost is that `reckoner::Mask` and `common::Mask` are both live spellings for the same entity,
 which is one more thing a newcomer has to be told.

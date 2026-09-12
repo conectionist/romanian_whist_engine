@@ -115,8 +115,12 @@ This produces `build/libromanian_whist_engine.a`.
 ctest --preset default --output-on-failure
 ```
 
-The suite covers the rules, the observer contract, move validation, cancellation, and two
-full games pinned to golden scores.
+The suite covers the rules, the observer contract, move validation, cancellation, seven full
+games pinned to golden scores, and the shared round tracker pinned to golden state.
+
+One test — Reckoner's exact final scores — is compiled only on Linux/GCC, the toolchain it was
+pinned against. Reckoner decides by argmax over floats, so a different libm plays a different
+game; `tests/CMakeLists.txt` has the measurements. Nothing else in the suite is float-dependent.
 
 `WHIST_BUILD_TESTS` defaults to `PROJECT_IS_TOP_LEVEL`, so a project that consumes the engine
 through `add_subdirectory` builds **neither** the tests nor Catch2. You pay for them only when
