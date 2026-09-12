@@ -1,7 +1,35 @@
 #include "GameHarness.h"
 
+#include <romanian_whist/AiMoveProvider.h>
+#include <romanian_whist/strategies/DuckingStrategy.h>
+#include <romanian_whist/strategies/FirstCardStrategy.h>
+#include <romanian_whist/strategies/LowRiskStrategy.h>
+
 namespace romanian_whist::test
 {
+std::vector<std::unique_ptr<IMoveProvider>> buildRoundRobinProviders(unsigned int playerCount)
+{
+    std::vector<std::unique_ptr<IMoveProvider>> providers;
+
+    for(unsigned int i = 0 ; i < playerCount ; i++)
+    {
+        switch(i % 3)
+        {
+            case 0:
+                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<FirstCardStrategy>()));
+                break;
+            case 1:
+                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>()));
+                break;
+            default:
+                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<DuckingStrategy>()));
+                break;
+        }
+    }
+
+    return providers;
+}
+
 std::unique_ptr<GameEngine> playFullGame(GameStructure structure,
                                          std::vector<std::unique_ptr<IMoveProvider>> providers,
                                          std::uint32_t seed,

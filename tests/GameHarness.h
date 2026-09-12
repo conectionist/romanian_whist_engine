@@ -50,6 +50,17 @@ GameSetup buildSetup(GameStructure structure,
 
 std::vector<int> finalScores(const GameEngine& engine);   // seat-ordered totals
 
+// Round-robins the three deterministic strategies across seats, so every
+// scenario exercises all three regardless of player count.
+// RandomCardStrategy is deliberately excluded: its draw count depends on
+// what every other seat bids, so any behavioural change desyncs its stream
+// and turns a located failure into "something changed somewhere" instead.
+//
+// Shared by every golden suite - GoldenGameTests pins the scores these produce,
+// CyborgMemoryTests pins the RoundMemory state they produce - so the two are
+// looking at the same games and a divergence can only be in what is measured.
+std::vector<std::unique_ptr<IMoveProvider>> buildRoundRobinProviders(unsigned int playerCount);
+
 // (bid, tricksWon) per seat, per round.
 using RoundRecord = std::vector<std::vector<std::pair<unsigned int, unsigned int>>>;
 

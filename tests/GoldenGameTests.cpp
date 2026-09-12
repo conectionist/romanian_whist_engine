@@ -2,45 +2,12 @@
 
 #include "GameHarness.h"
 
-#include <romanian_whist/AiMoveProvider.h>
-#include <romanian_whist/strategies/DuckingStrategy.h>
-#include <romanian_whist/strategies/FirstCardStrategy.h>
-#include <romanian_whist/strategies/LowRiskStrategy.h>
-
 using namespace romanian_whist;
 using namespace romanian_whist::test;
 
 namespace
 {
 constexpr std::uint32_t kGoldenSeed = 42;
-
-// Round-robins the three deterministic strategies across seats, so every
-// scenario exercises all three regardless of player count.
-// RandomCardStrategy is deliberately excluded: its draw count depends on
-// what every other seat bids, so any behavioural change desyncs its stream
-// and turns a located failure into "something changed somewhere" instead.
-std::vector<std::unique_ptr<IMoveProvider>> buildRoundRobinProviders(unsigned int playerCount)
-{
-    std::vector<std::unique_ptr<IMoveProvider>> providers;
-
-    for(unsigned int i = 0 ; i < playerCount ; i++)
-    {
-        switch(i % 3)
-        {
-            case 0:
-                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<FirstCardStrategy>()));
-                break;
-            case 1:
-                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>()));
-                break;
-            default:
-                providers.push_back(std::make_unique<AiMoveProvider>(std::make_unique<DuckingStrategy>()));
-                break;
-        }
-    }
-
-    return providers;
-}
 }
 
 TEST_CASE("Golden game: 2 players, S_181", "[golden]")

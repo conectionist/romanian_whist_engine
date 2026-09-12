@@ -58,21 +58,30 @@ TEST_CASE("ReckonerStrategy: full game integration across player counts and pres
     }
 }
 
-// Reckoner's exact scores, pinned.
+// Reckoner's exact scores, pinned - on ONE toolchain.
 //
-// This exists to guard refactors of the machinery underneath the strategy - the
-// round tracker above all, which is shared with other strategies and so gets
-// edited for reasons that have nothing to do with Reckoner. The tournament test
-// next door only asserts that Reckoner beats LowRisk on average, which a change
-// that made it 15% worse would sail straight through. These vectors would not.
+// This exists to guard the machinery underneath the strategy against changes
+// that leave it working but playing worse. The tournament test next door only
+// asserts that Reckoner beats LowRisk on average, which a change that made it
+// 15% worse would sail straight through. These vectors would not.
 //
 // Every deck profile is covered (2 through 6 players, so every ranksPerSuit from
 // 4 to 12) and both round structures, because the mask arithmetic is indexed by
 // player count and an off-by-one there shows up in one profile and no others.
 //
+// WHY IT IS GUARDED: Reckoner chooses by argmax over floats fed by std::exp and
+// std::pow, so the same source legitimately plays a different game on a
+// different libm. CI measured all three - see the comment on
+// WHIST_PIN_FLOAT_GOLDENS in tests/CMakeLists.txt for the numbers. The vectors
+// below are pinned against Linux/GCC and are not checked elsewhere, which means
+// they do NOT guard the shared round tracker on Windows or macOS: that job
+// belongs to CyborgMemoryTests.cpp, which pins integer state and runs everywhere.
+//
 // A deliberate change to how Reckoner decides SHOULD break this. Re-pin it in the
-// same commit, and say in the message what moved and why.
-TEST_CASE("ReckonerStrategy: pinned scores across every deck profile", "[reckoner][golden]")
+// same commit, and say in the message what moved and why - on a Linux/GCC build,
+// because that is the only place these numbers mean anything.
+#if defined(WHIST_PIN_FLOAT_GOLDENS)
+TEST_CASE("ReckonerStrategy: pinned scores across every deck profile", "[reckoner][golden][fp-pinned]")
 {
     auto run = [](unsigned int playerCount, GameStructure structure, std::uint32_t shuffleSeed) {
         GameEngine engine;
@@ -99,6 +108,7 @@ TEST_CASE("ReckonerStrategy: pinned scores across every deck profile", "[reckone
     REQUIRE(run(5, GameStructure::S_181, 14) == std::vector<int>{ 117, 105, 83, 92, 96 });
     REQUIRE(run(6, GameStructure::S_818, 15) == std::vector<int>{ 146, 110, 105, 84, 121, 117 });
 }
+#endif
 
 TEST_CASE("ReckonerStrategy: deterministic replay given same seed", "[reckoner]")
 {
