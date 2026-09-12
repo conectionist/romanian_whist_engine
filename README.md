@@ -17,7 +17,7 @@ free.
 - Is your UI on a different thread from the game (Qt, a web backend)? Read
   [Threading, stopping, and failure](#threading-stopping-and-failure) **first**. It is not
   optional, and it is not discoverable from a compile error.
-- Writing an AI? [STRATEGIES.md](STRATEGIES.md).
+- Writing an AI? [docs/STRATEGIES.md](docs/STRATEGIES.md).
 - Coming from engine 3.x? [CHANGELOG.md](CHANGELOG.md) has the migration table. Almost everything
   moved.
 
@@ -712,7 +712,7 @@ Write your own by implementing `IStrategy` from
 `getBestChoice` an `std::optional<Card>`. Strategies reason in cards; turning the chosen card into
 the index the engine wants is `AiMoveProvider`'s job.
 
-See **[STRATEGIES.md](STRATEGIES.md)** for how each one decides, how they score against
+See **[docs/STRATEGIES.md](docs/STRATEGIES.md)** for how each one decides, how they score against
 each other, and where they fall down.
 
 ---

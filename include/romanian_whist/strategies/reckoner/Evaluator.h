@@ -1,6 +1,7 @@
 #ifndef ROMANIAN_WHIST_EVALUATOR_H
 #define ROMANIAN_WHIST_EVALUATOR_H
 
+#include <romanian_whist/strategies/common/Hypergeometric.h>
 #include <romanian_whist/strategies/reckoner/CardMask.h>
 
 #include <array>
@@ -22,8 +23,11 @@ struct EvalContext
     std::optional<Suit> trumpSuit = std::nullopt;
 };
 
-// Hypergeometric P(h cards drawn without replacement from n contain none of k marked cards)
-float hyper0(unsigned int k, unsigned int n, unsigned int h);
+// Hypergeometric P(h cards drawn without replacement from n contain none of k
+// marked cards). Lives in strategies/common/Hypergeometric.h now - it is wanted
+// by every strategy that counts cards, not just this one. Aliased here so the
+// reckoner sources that call it unqualified keep compiling.
+using common::hyper0;
 
 // Fast round-shape-aware estimate of hand H's expected tricks
 float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx);

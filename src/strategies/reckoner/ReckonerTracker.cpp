@@ -9,44 +9,9 @@ namespace romanian_whist::reckoner
 void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int mySeatIdx,
                                 unsigned int openerSeat, std::optional<Card> trump)
 {
-    playerCount = n;
-    roundTrickCount = r;
-    mySeat = mySeatIdx;
-    opener = openerSeat;
-    currentTrickLeader = openerSeat;
-
-    const auto& profile = getDeckProfile(playerCount);
-
-    if(trump)
-    {
-        trumpCard = cardToId(*trump, playerCount);
-        trumpSuit = trump->suit;
-    }
-    else
-    {
-        trumpCard = std::nullopt;
-        trumpSuit = std::nullopt;
-    }
-
-    live = profile.fullDeckMask;
-    if(trumpCard)
-    {
-        // The turned-up card is dead
-        live &= ~cardBit(*trumpCard);
-    }
-
-    for(unsigned int p = 0; p < playerCount; ++p)
-    {
-        playedBy[p] = 0ULL;
-        handSize[p] = roundTrickCount;
-        voidMask[p] = 0;
-        bids[p] = UNBID;
-        won[p] = 0;
-    }
+    common::RoundMemory::initRound(n, r, mySeatIdx, openerSeat, trump);
 
     constraints.clear();
-    completedTricks.clear();
-    currentTrickCards.clear();
 
     // Compute initial context for o's starting hand evaluation
     initialContext.playerCount = playerCount;
@@ -59,111 +24,25 @@ void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int myS
     initialContext.trumpSuit = trumpSuit;
 }
 
-void ReckonerTracker::recordBid(unsigned int seat, unsigned int value)
-{
-    if(seat < playerCount)
-    {
-        bids[seat] = static_cast<int>(value);
-    }
-}
-
-bool ReckonerTracker::cardBeats(CardId candidate, CardId currentBest, Suit leadSuit) const
-{
-    const auto& profile = getDeckProfile(playerCount);
-    const unsigned int candSuit = cardSuit(candidate, profile.ranksPerSuit);
-    const unsigned int bestSuit = cardSuit(currentBest, profile.ranksPerSuit);
-    const unsigned int candRank = cardRank(candidate, profile.ranksPerSuit);
-    const unsigned int bestRank = cardRank(currentBest, profile.ranksPerSuit);
-
-    const std::optional<unsigned int> trumpSuitIdx =
-        trumpSuit ? std::optional<unsigned int>(static_cast<unsigned int>(*trumpSuit)) : std::nullopt;
-
-    const bool candIsTrump = trumpSuitIdx && candSuit == *trumpSuitIdx;
-    const bool bestIsTrump = trumpSuitIdx && bestSuit == *trumpSuitIdx;
-
-    if(candIsTrump || bestIsTrump)
-    {
-        if(candIsTrump != bestIsTrump)
-            return candIsTrump;
-        return candRank > bestRank;
-    }
-
-    const unsigned int leadSuitIdx = static_cast<unsigned int>(leadSuit);
-    const bool candIsLead = candSuit == leadSuitIdx;
-    const bool bestIsLead = bestSuit == leadSuitIdx;
-
-    if(candIsLead != bestIsLead)
-        return candIsLead;
-
-    if(candIsLead)
-        return candRank > bestRank;
-
-    // Two off-suit discards: earlier stays ahead
-    return false;
-}
-
-void ReckonerTracker::recordCardPlayed(unsigned int seat, const Card& card)
+PrePlayState ReckonerTracker::recordCardPlayed(unsigned int seat, const Card& card)
 {
     if(seat >= playerCount)
-        return;
+        return PrePlayState{};
 
     const CardId c = cardToId(card, playerCount);
-    const auto& profile = getDeckProfile(playerCount);
 
-    // Determine current best card and lead suit before this card is played
-    CardId bestBefore = INVALID_CARD_ID;
-    unsigned int bestHolderBefore = seat;
-    std::optional<Suit> leadSuit = std::nullopt;
+    // The base records the card and draws the certain inferences, and hands
+    // back the position the player was choosing from.
+    const PrePlayState before = common::RoundMemory::recordCardPlayed(seat, card);
 
-    if(!currentTrickCards.empty())
+    // Soft rank-gap inferences (§1.4). Nothing below reads currentTrickCards,
+    // so it does not matter that the base has already appended to it.
+    if(seat != mySeat && before.leadSuit && before.bestBefore != INVALID_CARD_ID)
     {
-        const CardId leadCard = currentTrickCards.front().card;
-        leadSuit = static_cast<Suit>(cardSuit(leadCard, profile.ranksPerSuit));
-        bestBefore = leadCard;
-        bestHolderBefore = currentTrickCards.front().seat;
-
-        for(std::size_t i = 1; i < currentTrickCards.size(); ++i)
-        {
-            if(cardBeats(currentTrickCards[i].card, bestBefore, *leadSuit))
-            {
-                bestBefore = currentTrickCards[i].card;
-                bestHolderBefore = currentTrickCards[i].seat;
-            }
-        }
+        applyRankGapInferences(seat, c, before.bestBefore, before.bestHolderBefore, before.leadSuit);
     }
 
-    // Update state per §1.3
-    live &= ~cardBit(c);
-    playedBy[seat] |= cardBit(c);
-    if(handSize[seat] > 0)
-    {
-        handSize[seat]--;
-    }
-
-    // Hard void inferences (§1.3)
-    if(leadSuit)
-    {
-        const unsigned int cSuit = cardSuit(c, profile.ranksPerSuit);
-        const unsigned int lSuit = static_cast<unsigned int>(*leadSuit);
-
-        if(cSuit != lSuit)
-        {
-            voidMask[seat] |= static_cast<std::uint8_t>(1 << lSuit);
-
-            if(trumpSuit && cSuit != static_cast<unsigned int>(*trumpSuit))
-            {
-                voidMask[seat] |= static_cast<std::uint8_t>(1 << static_cast<unsigned int>(*trumpSuit));
-            }
-        }
-    }
-
-    // Soft rank-gap inferences (§1.4)
-    if(seat != mySeat && leadSuit && bestBefore != INVALID_CARD_ID)
-    {
-        applyRankGapInferences(seat, c, bestBefore, bestHolderBefore, leadSuit);
-    }
-
-    currentTrickCards.push_back(TrickCard{seat, c});
+    return before;
 }
 
 void ReckonerTracker::applyRankGapInferences(unsigned int p, CardId c, CardId bestBefore,
@@ -295,17 +174,6 @@ void ReckonerTracker::applyRankGapInferences(unsigned int p, CardId c, CardId be
     }
 }
 
-void ReckonerTracker::recordTrickWon(unsigned int winner)
-{
-    if(winner < playerCount)
-    {
-        won[winner]++;
-        completedTricks.push_back(CompletedTrick{currentTrickLeader, winner, std::move(currentTrickCards)});
-        currentTrickCards.clear();
-        currentTrickLeader = winner;
-    }
-}
-
 void ReckonerTracker::recordRoundEnd(const std::vector<int>& /*roundScores*/, const std::vector<int>& runningTotals)
 {
     // Standings & score leader
@@ -378,22 +246,6 @@ EvalContext ReckonerTracker::makeCurrentEvalContext() const
     ctx.voidMask = voidMask;
     ctx.trumpSuit = trumpSuit;
     return ctx;
-}
-
-Mask ReckonerTracker::getUnseenCards(Mask myHand) const
-{
-    return live & ~myHand;
-}
-
-unsigned int ReckonerTracker::getDeadCount() const
-{
-    unsigned int inHands = 0;
-    for(unsigned int p = 0; p < playerCount; ++p)
-    {
-        inHands += handSize[p];
-    }
-    const unsigned int liveCount = static_cast<unsigned int>(popcount(live));
-    return (liveCount >= inHands) ? (liveCount - inHands) : 0;
 }
 
 } // namespace romanian_whist::reckoner
