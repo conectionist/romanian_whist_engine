@@ -22,6 +22,8 @@ add_library(romanian_whist_engine STATIC
     src/strategies/TrickHeuristics.cpp
     src/strategies/LowRiskStrategy.cpp
     src/strategies/DuckingStrategy.cpp
+    src/strategies/common/Hypergeometric.cpp
+    src/strategies/common/RoundMemory.cpp
     src/strategies/reckoner/Evaluator.cpp
     src/strategies/reckoner/ReckonerTracker.cpp
     src/strategies/reckoner/Sampler.cpp

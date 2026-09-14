@@ -24,6 +24,7 @@ add_executable(romanian_whist_engine_tests
     AiMoveProviderTests.cpp
     ReadmeQuickStartTests.cpp
     CardMaskTests.cpp
+    CyborgMemoryTests.cpp
     EvaluatorTests.cpp
     ReckonerTrackerTests.cpp
     SamplerTests.cpp
@@ -61,6 +62,26 @@ target_compile_definitions(romanian_whist_engine_tests PRIVATE
     WHIST_README_PATH="${PROJECT_SOURCE_DIR}/README.md"
     WHIST_QUICKSTART_TEST_PATH="${CMAKE_CURRENT_SOURCE_DIR}/ReadmeQuickStartTests.cpp"
 )
+
+# ReckonerStrategy picks cards by argmax over floats produced by std::exp and
+# std::pow, so a different libm - or an FMA-contracting target - legitimately
+# breaks a tie the other way and the whole game diverges from there. It is not a
+# bug in Reckoner; there is simply no portable answer to pin.
+#
+# Measured on CI run #19, same commit, same seed, 2 players S_181 seed 10:
+#
+#     Linux   / GCC         { 76, -18 }   <- what the vectors are pinned to
+#     macOS   / AppleClang   { 77, -18 }
+#     Windows / MSVC         { 61, -19 }
+#
+# So the exact-score pin is checked only on the toolchain it was pinned against.
+# -ffp-contract=off would NOT make it portable: these are three different libm
+# implementations, not one contraction setting. The portable guard over the
+# shared round tracker lives in CyborgMemoryTests.cpp, which pins integers only
+# and runs everywhere.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_definitions(romanian_whist_engine_tests PRIVATE WHIST_PIN_FLOAT_GOLDENS=1)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)

@@ -17,7 +17,7 @@ free.
 - Is your UI on a different thread from the game (Qt, a web backend)? Read
   [Threading, stopping, and failure](#threading-stopping-and-failure) **first**. It is not
   optional, and it is not discoverable from a compile error.
-- Writing an AI? [STRATEGIES.md](STRATEGIES.md).
+- Writing an AI? [docs/STRATEGIES.md](docs/STRATEGIES.md).
 - Coming from engine 3.x? [CHANGELOG.md](CHANGELOG.md) has the migration table. Almost everything
   moved.
 
@@ -115,8 +115,12 @@ This produces `build/libromanian_whist_engine.a`.
 ctest --preset default --output-on-failure
 ```
 
-The suite covers the rules, the observer contract, move validation, cancellation, and two
-full games pinned to golden scores.
+The suite covers the rules, the observer contract, move validation, cancellation, seven full
+games pinned to golden scores, and the shared round tracker pinned to golden state.
+
+One test — Reckoner's exact final scores — is compiled only on Linux/GCC, the toolchain it was
+pinned against. Reckoner decides by argmax over floats, so a different libm plays a different
+game; `tests/CMakeLists.txt` has the measurements. Nothing else in the suite is float-dependent.
 
 `WHIST_BUILD_TESTS` defaults to `PROJECT_IS_TOP_LEVEL`, so a project that consumes the engine
 through `add_subdirectory` builds **neither** the tests nor Catch2. You pay for them only when
@@ -738,7 +742,7 @@ Write your own by implementing `IStrategy` from
 `getBestChoice` an `std::optional<Card>`. Strategies reason in cards; turning the chosen card into
 the index the engine wants is `AiMoveProvider`'s job.
 
-See **[STRATEGIES.md](STRATEGIES.md)** for how each one decides, how they score against
+See **[docs/STRATEGIES.md](docs/STRATEGIES.md)** for how each one decides, how they score against
 each other, and where they fall down.
 
 ---
@@ -771,7 +775,9 @@ include/romanian_whist/     public headers — this is the include root
 ├── CardValidator.h         legal-move rules and the trick ranking
 ├── AiMoveProvider.h        AI player driven by an IStrategy
 ├── strategies/             IStrategy + the five bundled strategies
-│   └── reckoner/           ReckonerStrategy's internals: tracker, sampler, rollout
+│   ├── common/             shared across strategies: round memory, card bitmasks
+│   └── reckoner/           ReckonerStrategy's internals: sampler, rollout, evaluator,
+│                           and the guessing half of its tracker
 └── detail/                 internal; not part of the public contract
 src/                        implementation
 tests/                      Catch2 suite (see Running the tests)
