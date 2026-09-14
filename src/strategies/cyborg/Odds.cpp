@@ -131,7 +131,16 @@ bool isSureLoserOnLead(common::CardId c, const OddsContext& ctx)
     // FIRST, and not decoration: every condition below is vacuously true for a
     // card nothing can beat, so without this an ace with no lower cards live
     // reports as a sure loser.
-    if(beaters(c, ctx.unseen, ctx) == 0)
+    //
+    // And reachableBeaters(), not beaters(), so that this asks exactly the
+    // question isSureWinner() asks. In a consistent deal the two agree here -
+    // nothing is dead, so every beater is in a hand, and its holder is not void
+    // in its suit. They part company only when the memory contradicts itself
+    // (every opponent recorded void in a suit whose top card is still out), and
+    // then beaters() made the same card a sure winner AND a sure loser.
+    // reachableBeaters() also carries the CardId bounds check, which must run
+    // before the maskBelow() below.
+    if(reachableBeaters(c, ctx) == 0)
         return false;
 
     // Something is undealt, so the beater need not be in anybody's hand.

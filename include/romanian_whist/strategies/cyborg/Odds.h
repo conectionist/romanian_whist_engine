@@ -91,7 +91,9 @@ bool isSureWinner(common::CardId c, const OddsContext& ctx);
 // ruff. Opponents' voids do not enter into it.
 //
 // The "a beater exists" half is not decoration - without it the other conditions
-// are vacuously true for a card nothing can beat.
+// are vacuously true for a card nothing can beat. It is tested with
+// reachableBeaters(), the same question isSureWinner() asks, so the two can never
+// both be true of one card - not even when the memory contradicts itself.
 bool isSureLoserOnLead(common::CardId c, const OddsContext& ctx);
 
 // §3.3. P(this card takes the trick if I lead it).

@@ -397,6 +397,88 @@ TEST_CASE("Cyborg odds: another player's void does not rescue a sure loser", "[c
     }
 }
 
+TEST_CASE("Cyborg odds: no card is ever both a sure winner and a sure loser", "[cyborg]")
+{
+    // isSureWinner() asks whether any live opponent could hold a card that beats
+    // this one. isSureLoserOnLead() used to ask only whether such a card was still
+    // unplayed. In a consistent deal those agree whenever it matters; they part
+    // company when the memory contradicts itself, and then the same card came back
+    // as a certain winner and a certain loser at once. The play rules rely on the
+    // two excluding each other, so both now ask the same question.
+    constexpr unsigned int n = 4;
+
+    const auto hearts = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Hearts));
+    const auto spades = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Spades));
+
+    // Nothing dead, the ace of hearts unplayed - and yet every opponent recorded
+    // out of hearts. No real deal looks like this; a missed callback can.
+    OddsContext contradictory{};
+    contradictory.playerCount = n;
+    contradictory.mySeat = 0;
+    contradictory.trumpSuit = std::nullopt;
+    contradictory.duckPropensity = 0.6f;
+    contradictory.handSize = { 0, 2, 2, 2, 0, 0 };
+    contradictory.unseen = common::cardBit(id(Card{Rank::Ace, Suit::Hearts}, n)) |
+                           common::cardBit(id(Card{Rank::Ace, Suit::Spades}, n)) |
+                           common::cardBit(id(Card{Rank::King, Suit::Spades}, n)) |
+                           common::cardBit(id(Card{Rank::Ace, Suit::Clubs}, n)) |
+                           common::cardBit(id(Card{Rank::King, Suit::Clubs}, n)) |
+                           common::cardBit(id(Card{Rank::Ace, Suit::Diamonds}, n));
+    contradictory.handsOutstanding = static_cast<unsigned int>(common::popcount(contradictory.unseen));
+    contradictory.voidMask[1] = hearts;
+    contradictory.voidMask[2] = hearts;
+    contradictory.voidMask[3] = hearts;
+
+    SECTION("the contradictory position that exposed it")
+    {
+        const common::CardId king = id(Card{Rank::King, Suit::Hearts}, n);
+
+        REQUIRE(isSureWinner(king, contradictory));
+        REQUIRE_FALSE(isSureLoserOnLead(king, contradictory));
+        REQUIRE(pLeadWins(king, contradictory) == 1.0f);
+    }
+
+    SECTION("every card, in consistent and contradictory positions alike")
+    {
+        // The same cards with no voids at all: a consistent deal.
+        OddsContext consistent = contradictory;
+        consistent.voidMask = {};
+
+        // A trump round where only a trump is out, and every opponent is recorded
+        // out of trumps as well as hearts: contradictory again, the other way.
+        OddsContext trumpContradictory = contradictory;
+        trumpContradictory.trumpSuit = Suit::Spades;
+        trumpContradictory.unseen = common::cardBit(id(Card{Rank::Seven, Suit::Spades}, n)) |
+                                    common::cardBit(id(Card{Rank::Ace, Suit::Clubs}, n)) |
+                                    common::cardBit(id(Card{Rank::King, Suit::Clubs}, n)) |
+                                    common::cardBit(id(Card{Rank::Queen, Suit::Clubs}, n)) |
+                                    common::cardBit(id(Card{Rank::Ace, Suit::Diamonds}, n)) |
+                                    common::cardBit(id(Card{Rank::King, Suit::Diamonds}, n));
+        trumpContradictory.handsOutstanding =
+            static_cast<unsigned int>(common::popcount(trumpContradictory.unseen));
+        trumpContradictory.voidMask[1] = static_cast<std::uint8_t>(hearts | spades);
+        trumpContradictory.voidMask[2] = static_cast<std::uint8_t>(hearts | spades);
+        trumpContradictory.voidMask[3] = static_cast<std::uint8_t>(hearts | spades);
+
+        // And that trump round made consistent: out of hearts, but holding trumps.
+        OddsContext trumpConsistent = trumpContradictory;
+        trumpConsistent.voidMask[1] = hearts;
+        trumpConsistent.voidMask[2] = hearts;
+        trumpConsistent.voidMask[3] = hearts;
+
+        for(const OddsContext& ctx : { contradictory, consistent, trumpContradictory, trumpConsistent })
+        {
+            for(unsigned int c = 0 ; c < ctx.profile().deckSize ; c++)
+            {
+                const common::CardId card = static_cast<common::CardId>(c);
+
+                INFO(common::idToCard(card, n).toString());
+                REQUIRE_FALSE((isSureWinner(card, ctx) && isSureLoserOnLead(card, ctx)));
+            }
+        }
+    }
+}
+
 TEST_CASE("Cyborg odds: nothing dead means the answer is 0 or 1, never between", "[cyborg]")
 {
     // In an 8-trick round every unseen card is in somebody's hand, so the first

@@ -213,7 +213,7 @@ There is a third, narrower certainty that pays for itself in the endgame:
 
 **Sure loser (leading).** Three conditions, and **the first is the one that is easy to forget**:
 
-1. **A beater exists at all** — `beaters(c, unseen) != 0`.
+1. **A beater exists at all** — `reachableBeaters(c, unseen) != 0`.
 2. Nothing is dead (`|unseen| == H`, which is every 8-trick round and the late tricks of any round).
 3. No live card of `suit(c)` ranks below `c`.
 
@@ -223,6 +223,14 @@ out of the suit is *forced* to ruff, and `c` loses. That is the exact form of th
 Condition 1 is not decoration. Without it the other two are both **vacuously true** for a card
 nothing can beat — hold `A♥` in an 8-trick round with no lower hearts live and conditions 2–3 both
 hold, so the test reports a sure loser for a card that always wins. Check it first.
+
+Test condition 1 with **`reachableBeaters()`**, the same set the sure-winner test uses, not with
+`beaters()`. In a consistent deal they agree here: nothing is dead, so every beater is in a hand, and
+its holder is not void in its suit. They disagree only when the memory contradicts itself — every
+opponent recorded out of hearts while the ace of hearts is still unplayed, which only a missed
+callback can produce — and with `beaters()` that position makes the king a sure winner **and** a sure
+loser at once. The play rules in §6 rely on those two excluding each other, so both must ask the same
+question.
 
 **Do not add "no opponent is void in `suit(c)`".** An earlier version of this section listed it as a
 fourth condition and called it redundant. It is not redundant, it is wrong: a void in a third player's
