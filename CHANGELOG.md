@@ -3,6 +3,64 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
+## 4.2.0
+
+**A fifth strategy that counts cards, and the guard rails it needed.** `ReckonerStrategy` landed
+without a version of its own — it is the Monte-Carlo opponent described in
+[docs/romanian-whist-reckoner-ai.md](docs/romanian-whist-reckoner-ai.md), and this release is where
+it appears in the version, the README and [docs/STRATEGIES.md](docs/STRATEGIES.md), which all still
+said the engine shipped four.
+
+It is unlike the other four in one way that matters to every client: it is an `IStrategy` **and** an
+`IGameObserver`, and it is inert as the first until it has been registered as the second. That
+dependency was undocumented and unchecked, which is the rest of this release.
+
+Additive: no signature changed, and `makeReckonerSeat`, `ReckonerKnobs` and `ReckonerPreset` — all a
+client needs — behave as before.
+
+### Added
+
+- `ReckonerStrategy`, `makeReckonerSeat()`, `ReckonerKnobs` and `ReckonerPreset`, documented for the
+  first time here. Four presets, `easy()` through `brutal()`, differing only in sampling depth,
+  memory and a handful of weights.
+- `ReckonerTracker::MaxPlayers` — the width of the per-seat arrays, and the engine's own 2..6 ceiling
+  on a table.
+- `tests/ReckonerRobustnessTests.cpp` — what happens when the tracker is absent, stale, or describes
+  a different table from the one being played.
+
+### Fixed
+
+- **`ReckonerStrategy::getBestChoice()` could return an illegal card.**
+  `RolloutEngine::choosePlay()` is handed no `PlayContext`: it reconstructs the lead suit, the trump
+  and the deck profile from the tracker, so its answer is legal with respect to a *replica* of the
+  position. Any drift from the real one became an illegal move that nothing below caught. The answer
+  is now filtered through the same `CardValidator` every other strategy uses — as
+  `PlayContext`'s own documentation asks — and falls back to a legal card.
+- **Encoding a hand could throw rather than merely disagree.** The deck profiles are not nested in
+  both directions (two-handed is Jack..Ace, six-handed Three..Ace), so a tracker believing the table
+  is smaller than it is met a card it had no id for and threw `std::invalid_argument` out of
+  `cardsToMask()` before any answer existed. Both decisions now contain that.
+- **An unregistered strategy played on regardless.** Built but never passed to `addObserver()`, it
+  kept the tracker's initialisers — a four-handed table, no trump, an empty deck — and played from
+  them; seen from a two-handed game as "played a card that is not legal in this trick", a failure
+  several layers from its cause. Both decisions now throw `std::logic_error` naming
+  `makeReckonerSeat()` if they are reached before the strategy saw a round start. The check keys on
+  `initRound()`, the single funnel for the observer callback and the standalone hook alike, so a
+  tracker driven either way still answers.
+- **`ReckonerTracker::initRound()` wrote per-seat arrays through an unclamped count** and reset only
+  the seats in play, leaving a stale tail behind for anything that read past `playerCount`. Seats are
+  clamped to the array width and every slot is reset. This also clears a `-Wstringop-overflow`
+  warning at `-O2`.
+
+### Known
+
+- `RolloutEngine::rollout()` passes `BasePolicy::chooseCard()`'s `INVALID_CARD_ID` straight to
+  `cardBit()` and `maskSuit()` (`RolloutEngine.cpp:256`, `:278`), which UBSan reports as a 255-bit
+  shift and a read of `suitMasks[31]` when the rollout is driven from a sufficiently inconsistent
+  tracker. Not reachable from ordinary play — the `[reckoner]` games report zero UBSan errors — and
+  not fixed here, because the right recovery inside a sampled rollout is a judgement that would bias
+  the estimator with nothing to catch it.
+
 ## 4.1.0
 
 **A drawn game has more than one winner.** The engine ranked the standings but never said who won,

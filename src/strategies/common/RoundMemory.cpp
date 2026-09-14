@@ -1,16 +1,31 @@
 #include <romanian_whist/strategies/common/RoundMemory.h>
 
+#include <algorithm>
+
 namespace romanian_whist::common
 {
 
 void RoundMemory::initRound(unsigned int n, unsigned int r, unsigned int mySeatIdx,
                             unsigned int openerSeat, std::optional<Card> trump)
 {
-    playerCount = n;
+    // CLAMPED TO THE ARRAY WIDTH, not to the rules. GameEngine::start() already
+    // rejects any table outside 2..6 by name, so this cannot bite through the
+    // engine today - but every per-seat array below is written by a loop bounded
+    // by playerCount, so the cost of it ever biting is a buffer overflow rather
+    // than a wrong answer. GCC sees the same thing at -O2 and says so
+    // (-Wstringop-overflow on the voidMask write further down).
+    //
+    // Seats are clamped the same way for the same reason: mySeat and opener index
+    // those arrays directly.
+    playerCount = std::min(n, MaxPlayers);
     roundTrickCount = r;
-    mySeat = mySeatIdx;
-    opener = openerSeat;
-    currentTrickLeader = openerSeat;
+    mySeat = std::min(mySeatIdx, MaxPlayers - 1);
+    opener = std::min(openerSeat, MaxPlayers - 1);
+    currentTrickLeader = opener;
+
+    // THE MEMORY IS NOW WORTH READING, which nothing before this point was. See
+    // the comment on roundInitialised for what an unset one costs.
+    roundInitialised = true;
 
     const auto& profile = getDeckProfile(playerCount);
 
@@ -32,20 +47,27 @@ void RoundMemory::initRound(unsigned int n, unsigned int r, unsigned int mySeatI
         live &= ~cardBit(*trumpCard);
     }
 
-    // All six, not just the seats in play: the same RoundMemory can be reused
-    // for a smaller table, and a partial reset would leave the seats above
-    // playerCount holding a previous round's bids. Every consumer loops to
-    // playerCount today, so that stale tail is unreachable - but these are
-    // public members, and the invariant should not depend on who is reading.
-    playedBy.fill(0ULL);
-    handSize.fill(0);
-    voidMask.fill(0);
-    bids.fill(UNBID);
-    won.fill(0);
-
-    for(unsigned int p = 0; p < playerCount; ++p)
+    // EVERY SLOT, NOT ONLY THE SEATS IN PLAY. Two reasons, and the second is the
+    // one that made this a change rather than a tidy-up:
+    //
+    //   * a tail left behind is a real hazard the moment a memory outlives one
+    //     table size - reset only up to playerCount, seats 4 and 5 keep the
+    //     previous round's bids and hand sizes, and anything that ever reads them
+    //     (a sampler bug, a wrong seat) sees a plausible stale number rather than
+    //     an empty one; and
+    //   * bounded by the ARRAY rather than by a count, this is provably in range,
+    //     which the loop it replaced was not. GCC said so at -O2
+    //     (-Wstringop-overflow, "writing 1 byte into a region of size 0"), and a
+    //     warning in a per-seat write loop is not one to carry.
+    for(unsigned int p = 0; p < MaxPlayers; ++p)
     {
-        handSize[p] = roundTrickCount;
+        const bool seated = p < playerCount;
+
+        playedBy[p] = 0ULL;
+        handSize[p] = seated ? roundTrickCount : 0;
+        voidMask[p] = 0;
+        bids[p] = UNBID;
+        won[p] = 0;
     }
 
     completedTricks.clear();

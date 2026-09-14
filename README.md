@@ -89,10 +89,10 @@ Releases are tagged, so pin one rather than tracking a branch:
 ```bash
 cd libs/RomanianWhistEngine
 git fetch --tags
-git checkout v4.1.0
+git checkout v4.2.0
 cd ../..
 git add libs/RomanianWhistEngine
-git commit -m "Update Romanian Whist engine to 4.1.0"
+git commit -m "Update Romanian Whist engine to 4.2.0"
 ```
 
 `git pull origin master` also works if you would rather track the tip. Either way, read
@@ -706,10 +706,36 @@ whatever you set up before the call, because nothing else will.
 | `FirstCardStrategy` | Plays the first legal card; bids 0, or 1 when 0 is barred |
 | `LowRiskStrategy` | Bids the tricks its hand will take whether it wants them or not — usually 0 — then plays to that bid: takes tricks as cheaply as it can while it still owes some, and ducks every trick after that |
 | `DuckingStrategy` | Bids 0 come what may and never chases a trick, dumping its highest cards at the moments they cannot win |
+| `ReckonerStrategy` | Counts every card played and searches imagined deals before each decision. Four presets, from a memoryless `Easy` to a `Brutal` that solves the endgame exactly. **Needs registering as an observer — see below.** |
 
 The two low-risk strategies share their judgement calls through
 `<romanian_whist/strategies/TrickHeuristics.h>`, which is public — reuse it rather than
 re-deriving "is this card safe to play?" for your own strategy.
+
+### ReckonerStrategy is also an observer
+
+It is the one strategy here that cannot be built and handed over on its own. Everything it
+plays from — who has shown void in what, which cards are gone, what everyone bid — arrives
+through `IGameObserver`, so it has to be registered with the engine **before** `start()`,
+which is where it also resolves its own seat from its name.
+
+Use the factory, which does all of that:
+
+```cpp
+GameEngine engine;
+GameSetup setup;
+
+setup.seats.push_back(makeReckonerSeat("Ana", engine, reckoner::ReckonerKnobs::hard()));
+// ...other seats...
+
+engine.start(std::move(setup));   // AFTER the seat was built against this engine
+```
+
+Constructing one directly and skipping `addObserver()` is a mistake the type system cannot
+catch, so the strategy catches it instead: both decisions throw `std::logic_error` if they
+are reached before the strategy ever saw a round start. Presets are
+`ReckonerKnobs::easy() / medium() / hard() / brutal()`, and
+`docs/romanian-whist-reckoner-ai.md` documents every knob behind them.
 
 Write your own by implementing `IStrategy` from
 `<romanian_whist/strategies/IStrategy.h>`: `getBestBet` returns an `unsigned int` and
@@ -748,7 +774,8 @@ include/romanian_whist/     public headers — this is the include root
 ├── Deck.h                  composition and the seeded shuffle
 ├── CardValidator.h         legal-move rules and the trick ranking
 ├── AiMoveProvider.h        AI player driven by an IStrategy
-├── strategies/             IStrategy + the four bundled strategies
+├── strategies/             IStrategy + the five bundled strategies
+│   └── reckoner/           ReckonerStrategy's internals: tracker, sampler, rollout
 └── detail/                 internal; not part of the public contract
 src/                        implementation
 tests/                      Catch2 suite (see Running the tests)

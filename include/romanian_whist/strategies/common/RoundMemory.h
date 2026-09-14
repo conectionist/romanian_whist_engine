@@ -60,6 +60,16 @@ struct PrePlayState
 class RoundMemory
 {
 public:
+    // The width of every per-seat array below, and the engine's own ceiling on a
+    // table (GameEngine::start() rejects anything outside 2..6 by name). Named
+    // because initRound() takes the seat count as an argument and has to clamp it:
+    // the arrays are indexed by a loop bounded by playerCount, so a count larger
+    // than this would be a buffer overflow rather than a bad estimate.
+    static constexpr unsigned int MaxPlayers = 6;
+
+    // FOUR IS AN INITIALISER, NOT AN ASSUMPTION - initRound() overwrites it with
+    // the real seat count on every round. It matters only until then, which is the
+    // window `roundInitialised` below exists to close.
     unsigned int playerCount = 4;
     unsigned int roundTrickCount = 1; // R
     unsigned int mySeat = 0;
@@ -71,10 +81,10 @@ public:
     // Neither played nor turned up as trump: could be in a hand, or undealt.
     Mask live = 0;
 
-    std::array<Mask, 6> playedBy{};
-    std::array<unsigned int, 6> handSize{};
-    std::array<std::uint8_t, 6> voidMask{}; // bit s is (1 << s)
-    std::array<unsigned int, 6> won{};
+    std::array<Mask, MaxPlayers> playedBy{};
+    std::array<unsigned int, MaxPlayers> handSize{};
+    std::array<std::uint8_t, MaxPlayers> voidMask{}; // bit s is (1 << s)
+    std::array<unsigned int, MaxPlayers> won{};
 
     // Not `{}` like its neighbours, and that is the whole point: zero is a real
     // bid, so a value-initialised array would read as "all six seats bid 0"
@@ -82,11 +92,26 @@ public:
     // default-constructed object - the worst possible wrong answer for a seat
     // about to bid. The neighbours above are safe because zero is their correct
     // empty value (no cards played, no voids proved, no tricks won).
-    std::array<int, 6> bids{UNBID, UNBID, UNBID, UNBID, UNBID, UNBID}; // UNBID, or 0..R
+    std::array<int, MaxPlayers> bids{UNBID, UNBID, UNBID, UNBID, UNBID, UNBID}; // UNBID, or 0..R
 
     std::vector<CompletedTrick> completedTricks;
     std::vector<TrickCard> currentTrickCards;
     unsigned int currentTrickLeader = 0;
+
+    // FALSE UNTIL initRound() HAS RUN, and the whole of this memory is meaningless
+    // until it has: playerCount is still 4, trumpSuit is empty, live is 0, and
+    // every per-seat array is empty. A strategy that decides from that state is
+    // not playing badly, it is reading a table that does not exist - and because
+    // the fields all hold plausible values rather than obviously wrong ones,
+    // nothing downstream notices.
+    //
+    // The flag lives here rather than on the owning strategy because initRound()
+    // is the single funnel into this object however it is driven - an
+    // IGameObserver callback, a standalone hook, or a test calling it directly -
+    // so a memory driven any of those ways answers this honestly. What a strategy
+    // DOES about a false reading is its own business: ReckonerStrategy throws
+    // naming makeReckonerSeat(), and Cyborg is specified to do the same.
+    bool roundInitialised = false;
 
     RoundMemory() = default;
 

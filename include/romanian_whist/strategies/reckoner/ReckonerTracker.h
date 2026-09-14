@@ -58,11 +58,11 @@ public:
     std::vector<SoftConstraint> constraints;
 
     // Kept across the whole game, unlike everything in the base.
-    std::array<OpponentModel, 6> opponentModels{};
+    std::array<OpponentModel, MaxPlayers> opponentModels{};
 
     // `{}` is correct here, unlike the base's `bids`: zero is the right score
     // before a game has been scored, so there is nothing to distinguish from.
-    std::array<int, 6> totalScores{};
+    std::array<int, MaxPlayers> totalScores{};
     unsigned int scoreLeaderSeat = 0;
     unsigned int myConsecutiveWins = 0;
     unsigned int myConsecutiveLosses = 0;
@@ -71,6 +71,10 @@ public:
     // and applyRankGapInferences() returns before it allocates.
     float rankGapConfScale = 1.0f;
 
+    // `roundInitialised`, `MaxPlayers` and every per-seat array are inherited from
+    // common::RoundMemory - they guard and describe the round memory itself, not
+    // Reckoner's use of it, so both AIs get them from one place. The guard that
+    // reads the flag and throws naming makeReckonerSeat() is in ReckonerStrategy.
     EvalContext initialContext{};
 
     ReckonerTracker() = default;

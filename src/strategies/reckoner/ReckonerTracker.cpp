@@ -9,6 +9,10 @@ namespace romanian_whist::reckoner
 void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int mySeatIdx,
                                 unsigned int openerSeat, std::optional<Card> trump)
 {
+    // The base clamps the seat count to the array width, resets every slot rather
+    // than only the seats in play, and raises roundInitialised. All three moved
+    // there with the extraction: they are properties of the memory, not of
+    // Reckoner's reading of it.
     common::RoundMemory::initRound(n, r, mySeatIdx, openerSeat, trump);
 
     constraints.clear();
@@ -16,9 +20,9 @@ void ReckonerTracker::initRound(unsigned int n, unsigned int r, unsigned int myS
     // Compute initial context for o's starting hand evaluation
     initialContext.playerCount = playerCount;
     initialContext.live = live;
-    for(unsigned int p = 0; p < playerCount; ++p)
+    for(unsigned int p = 0; p < MaxPlayers; ++p)
     {
-        initialContext.handSize[p] = roundTrickCount;
+        initialContext.handSize[p] = (p < playerCount) ? roundTrickCount : 0;
         initialContext.voidMask[p] = 0;
     }
     initialContext.trumpSuit = trumpSuit;
