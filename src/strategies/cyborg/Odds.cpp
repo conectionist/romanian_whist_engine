@@ -142,17 +142,12 @@ bool isSureLoserOnLead(common::CardId c, const OddsContext& ctx)
     if((ctx.unseen & common::maskBelow(c, profile)) != 0)
         return false;
 
-    // Belt and braces. Given the two conditions above this cannot fire on
-    // correct memory - the beater is in somebody's hand, that somebody holds the
-    // suit and must follow, and they have nothing lower to throw - so do not go
-    // looking for the healthy-game case it catches. It is here for drift.
-    const unsigned int suit = common::cardSuit(c, profile.ranksPerSuit);
-    for(unsigned int seat = 0; seat < ctx.playerCount; ++seat)
-    {
-        if(seat != ctx.mySeat && ctx.handSize[seat] > 0 && isVoidIn(ctx, seat, suit))
-            return false;
-    }
-
+    // Deliberately NO void test here. Every beater is in somebody's hand: a
+    // higher card of the suit must be followed with, since nothing lower is
+    // live, and a trump held by a player with none of the suit must ruff. A
+    // third player's void changes neither. An earlier "no opponent is void"
+    // guard returned false in exactly those healthy positions - including every
+    // one where only trumps beat c, since then nobody holds the suit at all.
     return true;
 }
 
@@ -230,16 +225,16 @@ float pHolds(common::CardId c, unsigned int seatsYetToAct, Suit leadSuit, const 
 
         outstanding += ctx.handSize[seat];
 
+        // Not PROVED void is not the same as holding the suit. A seat with no
+        // void shown may follow, or may turn out to be void and be forced to
+        // ruff - so it can hurt me with either, exactly as reachableBeaters()
+        // counts it.
         if(!isVoidIn(ctx, seat, leadSuitIdx))
-        {
-            // Must follow suit, so only the led suit can hurt me.
             pool |= ctx.unseen & common::maskSuit(leadSuitIdx, profile);
-        }
-        else if(ctx.trumpSuit && !isVoidIn(ctx, seat, static_cast<unsigned int>(*ctx.trumpSuit)))
-        {
-            // Void in the led suit but holding trump: the rules force the ruff.
+
+        if(ctx.trumpSuit && !isVoidIn(ctx, seat, static_cast<unsigned int>(*ctx.trumpSuit)))
             pool |= ctx.unseen & common::maskSuit(static_cast<unsigned int>(*ctx.trumpSuit), profile);
-        }
+
         // Void in both: whatever they play is an off-suit discard, which cannot
         // win. They contribute nothing, and that is exact.
     }

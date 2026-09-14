@@ -304,6 +304,99 @@ TEST_CASE("Cyborg odds: pHolds is exact at both ends", "[cyborg]")
     }
 }
 
+TEST_CASE("Cyborg odds: pHolds counts trumps from seats not yet proved void", "[cyborg]")
+{
+    // The regression for pHolds treating "no void shown" as "must follow". My
+    // ace of hearts has no heart above it, but two seats are still to act and
+    // either may be out of hearts without having shown it - and then must ruff.
+    constexpr unsigned int n = 4;
+
+    const Card ace{Rank::Ace, Suit::Hearts};
+
+    OddsContext ctx{};
+    ctx.playerCount = n;
+    ctx.mySeat = 0;
+    ctx.trumpSuit = Suit::Spades;
+    ctx.handSize = { 2, 2, 2, 2, 0, 0 };
+    ctx.unseen = common::cardBit(id(Card{Rank::Ace, Suit::Spades}, n)) |
+                 common::cardBit(id(Card{Rank::Seven, Suit::Clubs}, n)) |
+                 common::cardBit(id(Card{Rank::Eight, Suit::Clubs}, n)) |
+                 common::cardBit(id(Card{Rank::Nine, Suit::Clubs}, n)) |
+                 common::cardBit(id(Card{Rank::Ten, Suit::Clubs}, n)) |
+                 common::cardBit(id(Card{Rank::King, Suit::Diamonds}, n));
+    ctx.handsOutstanding = 6;
+
+    SECTION("no voids shown: the live trump is a real risk")
+    {
+        // One beater (A♠), six unseen, the two seats to act hold four:
+        // hyper0(1, 6, 4) = 2/6.
+        REQUIRE_THAT(pHolds(id(ace, n), 2, Suit::Hearts, ctx), WithinAbs(1.0 / 3.0, 1e-6));
+    }
+
+    SECTION("both seats proved void in trump: nothing can take it")
+    {
+        const std::uint8_t spades = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Spades));
+        ctx.voidMask[1] = spades;
+        ctx.voidMask[2] = spades;
+
+        REQUIRE(pHolds(id(ace, n), 2, Suit::Hearts, ctx) == 1.0f);
+    }
+}
+
+TEST_CASE("Cyborg odds: another player's void does not rescue a sure loser", "[cyborg]")
+{
+    // The regression for a "no opponent is void in the suit" condition that
+    // §3.2 once carried. Everything is dealt and nothing below the card is live,
+    // so the beater's holder must play it or a player out of the suit must ruff.
+    constexpr unsigned int n = 4;
+
+    const unsigned int hearts = static_cast<unsigned int>(Suit::Hearts);
+
+    OddsContext ctx{};
+    ctx.playerCount = n;
+    ctx.mySeat = 0;
+    ctx.duckPropensity = 0.6f;
+    ctx.handSize = { 0, 2, 2, 2, 0, 0 };
+
+    SECTION("a higher card of the suit is out, and a third seat is void in it")
+    {
+        const Card king{Rank::King, Suit::Hearts};
+
+        ctx.trumpSuit = std::nullopt;
+        ctx.unseen = common::cardBit(id(Card{Rank::Ace, Suit::Hearts}, n)) |
+                     common::cardBit(id(Card{Rank::Ace, Suit::Spades}, n)) |
+                     common::cardBit(id(Card{Rank::King, Suit::Spades}, n)) |
+                     common::cardBit(id(Card{Rank::Ace, Suit::Clubs}, n)) |
+                     common::cardBit(id(Card{Rank::King, Suit::Clubs}, n)) |
+                     common::cardBit(id(Card{Rank::Ace, Suit::Diamonds}, n));
+        ctx.handsOutstanding = static_cast<unsigned int>(common::popcount(ctx.unseen));
+        ctx.voidMask[2] = static_cast<std::uint8_t>(1U << hearts);
+
+        REQUIRE(isSureLoserOnLead(id(king, n), ctx));
+        REQUIRE(pLeadWins(id(king, n), ctx) == 0.0f);
+    }
+
+    SECTION("only trumps beat it, so every opponent is out of the suit")
+    {
+        const Card ace{Rank::Ace, Suit::Hearts};
+
+        ctx.trumpSuit = Suit::Spades;
+        ctx.unseen = common::cardBit(id(Card{Rank::Seven, Suit::Spades}, n)) |
+                     common::cardBit(id(Card{Rank::Ace, Suit::Clubs}, n)) |
+                     common::cardBit(id(Card{Rank::King, Suit::Clubs}, n)) |
+                     common::cardBit(id(Card{Rank::Queen, Suit::Clubs}, n)) |
+                     common::cardBit(id(Card{Rank::Ace, Suit::Diamonds}, n)) |
+                     common::cardBit(id(Card{Rank::King, Suit::Diamonds}, n));
+        ctx.handsOutstanding = static_cast<unsigned int>(common::popcount(ctx.unseen));
+        ctx.voidMask[1] = static_cast<std::uint8_t>(1U << hearts);
+        ctx.voidMask[2] = static_cast<std::uint8_t>(1U << hearts);
+        ctx.voidMask[3] = static_cast<std::uint8_t>(1U << hearts);
+
+        REQUIRE(isSureLoserOnLead(id(ace, n), ctx));
+        REQUIRE(pLeadWins(id(ace, n), ctx) == 0.0f);
+    }
+}
+
 TEST_CASE("Cyborg odds: nothing dead means the answer is 0 or 1, never between", "[cyborg]")
 {
     // In an 8-trick round every unseen card is in somebody's hand, so the first

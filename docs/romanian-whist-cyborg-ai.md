@@ -211,24 +211,25 @@ strategy and the referee cannot drift apart.
 
 There is a third, narrower certainty that pays for itself in the endgame:
 
-**Sure loser (leading).** Four conditions, and **the first is the one that is easy to forget**:
+**Sure loser (leading).** Three conditions, and **the first is the one that is easy to forget**:
 
 1. **A beater exists at all** — `beaters(c, unseen) != 0`.
 2. Nothing is dead (`|unseen| == H`, which is every 8-trick round and the late tricks of any round).
 3. No live card of `suit(c)` ranks below `c`.
-4. No opponent is void in `suit(c)`.
 
-Then whoever holds the top live card of the suit is *forced* to play it, and `c` loses. That is the
-exact form of the reasoning in §7.5.
+Then whoever holds the top live card of the suit is *forced* to play it, a trump held by a player
+out of the suit is *forced* to ruff, and `c` loses. That is the exact form of the reasoning in §7.5.
 
-Condition 1 is not decoration. Without it the other three are all **vacuously true** for a card
-nothing can beat — hold `A♥` in an 8-trick round with no lower hearts live and conditions 2–4 all
+Condition 1 is not decoration. Without it the other two are both **vacuously true** for a card
+nothing can beat — hold `A♥` in an 8-trick round with no lower hearts live and conditions 2–3 both
 hold, so the test reports a sure loser for a card that always wins. Check it first.
 
-Condition 4, by contrast, is redundant given 2 and 3: if nothing is dead the beater sits in
-somebody's hand, that somebody holds the suit and must follow, and nothing lower is available to
-them. Keep it as a guard against drifted memory, but do not go looking for the case it catches in
-a healthy game — there isn't one.
+**Do not add "no opponent is void in `suit(c)`".** An earlier version of this section listed it as a
+fourth condition and called it redundant. It is not redundant, it is wrong: a void in a third player's
+hand changes nothing about the beater's holder. With `K♥` led, `A♥` in X's hand and Y known void in
+hearts, X must play the ace or Y ruffs — `c` loses either way, and the extra condition would report
+it as a possible winner. Worse, when only trumps beat `c`, nobody holds the suit at all, so the
+condition fails in every such position.
 
 ### 3.3 P(this wins if I lead it)
 
@@ -309,6 +310,11 @@ pHolds(c):                                  // c must already beat the current b
 
 A seat known void in the lead suit contributes only trumps to `B`. A seat void in both contributes
 nothing — it cannot beat you at all, and that is a certainty, not an estimate.
+
+A seat with **no** void shown contributes the lead suit **and** trumps. "Not proved void" is not "must
+follow": it may be out of the suit without having shown it yet, and then it must ruff. Counting only
+the lead suit for such a seat reports an unbeatable ace as a certain winner while trumps are live
+behind it.
 
 ---
 

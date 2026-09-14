@@ -87,7 +87,8 @@ bool isSureWinner(common::CardId c, const OddsContext& ctx);
 
 // §3.2, the mirror. Leading this card CANNOT win: a beater exists, nothing is
 // dead, nothing of the suit ranks below it, so whoever holds the top card of the
-// suit must follow with it.
+// suit must follow with it - and a trump held by a player out of the suit must
+// ruff. Opponents' voids do not enter into it.
 //
 // The "a beater exists" half is not decoration - without it the other conditions
 // are vacuously true for a card nothing can beat.
