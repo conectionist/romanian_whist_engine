@@ -775,7 +775,9 @@ include/romanian_whist/     public headers — this is the include root
 ├── CardValidator.h         legal-move rules and the trick ranking
 ├── AiMoveProvider.h        AI player driven by an IStrategy
 ├── strategies/             IStrategy + the five bundled strategies
-│   └── reckoner/           ReckonerStrategy's internals: tracker, sampler, rollout
+│   ├── common/             shared across strategies: round memory, card bitmasks
+│   └── reckoner/           ReckonerStrategy's internals: sampler, rollout, evaluator,
+│                           and the guessing half of its tracker
 └── detail/                 internal; not part of the public contract
 src/                        implementation
 tests/                      Catch2 suite (see Running the tests)
