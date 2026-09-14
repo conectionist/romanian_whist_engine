@@ -57,7 +57,7 @@ Rank lowestRankFor(unsigned int playerCount)
 }
 } // namespace
 
-TEST_CASE("Cyborg halves: the big cards are exactly the §1 table", "[cyborg]")
+TEST_CASE("Cyborg halves: the big cards are exactly the section 1 table", "[cyborg]")
 {
     for(unsigned int n = 2 ; n <= 6 ; n++)
     {

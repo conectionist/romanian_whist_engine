@@ -42,7 +42,7 @@ OddsContext oneCardRound(const Card& myCard, float duckPropensity)
 }
 } // namespace
 
-TEST_CASE("Cyborg odds: §7.1, leading the ten of trumps at four players", "[cyborg]")
+TEST_CASE("Cyborg odds: worked example 7.1, leading the ten of trumps at four players", "[cyborg]")
 {
     const Card myCard{Rank::Ten, Suit::Hearts};
     const OddsContext ctx = oneCardRound(myCard, 0.0f);
@@ -126,7 +126,7 @@ TEST_CASE("Cyborg odds: a dead turn-up ace makes my king the top trump", "[cybor
     REQUIRE(pLeadWins(id(myKing, 4), ctx) == 1.0f);
 }
 
-TEST_CASE("Cyborg odds: §7.5, leading a queen that cannot win", "[cyborg]")
+TEST_CASE("Cyborg odds: worked example 7.5, leading a queen that cannot win", "[cyborg]")
 {
     // An 8-trick round: the whole deck is dealt, so nothing is dead and every
     // unseen card is definitely in somebody's hand.
