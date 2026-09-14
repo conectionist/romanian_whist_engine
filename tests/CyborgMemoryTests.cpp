@@ -371,3 +371,46 @@ TEST_CASE("RoundMemory: initRound clears the seats above playerCount", "[memory]
 
     CHECK(memory.bidsPlaced() == 0);
 }
+
+// The must-trump inference, as a single located fixture.
+//
+// The game-driven checker above already proves this across ten full games, by
+// recomputing every void independently - but it proves it statistically, and a
+// regression there surfaces as a digest mismatch that names nothing. These two
+// name it. They are also the clearest statement of the rule the strategy leans
+// on hardest: one discard can rule out two whole suits at once.
+TEST_CASE("RoundMemory: an off-suit discard with no trump in it proves two voids",
+          "[memory]")
+{
+    common::RoundMemory memory;
+    memory.initRound(4, 4, 0, 0, Card{Rank::Nine, Suit::Spades}); // spades are trump
+
+    // Seat 0 leads hearts; seat 1 throws a club.
+    memory.recordCardPlayed(0, Card{Rank::Ten, Suit::Hearts});
+    memory.recordCardPlayed(1, Card{Rank::Eight, Suit::Clubs});
+
+    const auto hearts = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Hearts));
+    const auto spades = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Spades));
+
+    // No hearts, because they did not follow. And no trump either: the rules
+    // would have FORCED the ruff, so declining to ruff proves they could not.
+    CHECK(memory.voidMask[1] == (hearts | spades));
+
+    // The leader reveals nothing - they chose the suit.
+    CHECK(memory.voidMask[0] == 0);
+}
+
+TEST_CASE("RoundMemory: a ruff proves only the lead-suit void", "[memory]")
+{
+    common::RoundMemory memory;
+    memory.initRound(4, 4, 0, 0, Card{Rank::Nine, Suit::Spades});
+
+    memory.recordCardPlayed(0, Card{Rank::Ten, Suit::Hearts});
+    memory.recordCardPlayed(1, Card{Rank::Seven, Suit::Spades}); // ruffs
+
+    const auto hearts = static_cast<std::uint8_t>(1U << static_cast<unsigned int>(Suit::Hearts));
+
+    // Out of hearts, obviously. But they clearly DO hold trumps, so the second
+    // inference must not fire - asserting the exact mask, not just the bit.
+    CHECK(memory.voidMask[1] == hearts);
+}

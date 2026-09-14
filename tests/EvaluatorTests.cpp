@@ -25,6 +25,34 @@ TEST_CASE("Evaluator: hyper0 matches exact combinatorics", "[reckoner][evaluator
     REQUIRE_THAT(hyper0(1, 32, 8), WithinAbs(0.75, 1e-5));
 }
 
+TEST_CASE("Evaluator: hyper0 past its lookup table still matches the arithmetic",
+          "[reckoner][evaluator]")
+{
+    // The table caches n <= 48, k <= 16, h <= 8 and everything else falls through
+    // to the same product computed in double. Cyborg reaches that path: a
+    // six-handed seven-trick round leaves 40 unseen cards with 35 of them dealt,
+    // so h is 35. Checked against closed-form arithmetic rather than against the
+    // table, since checking a cache against itself proves nothing.
+
+    // k = 1 telescopes: P(one marked card missed in h draws from n) = (n - h) / n.
+    REQUIRE_THAT(hyper0(1, 40, 35), WithinAbs(5.0 / 40.0, 1e-6));
+    REQUIRE_THAT(hyper0(1, 44, 15), WithinAbs(29.0 / 44.0, 1e-6));
+
+    // k = 2: C(n-2, h) / C(n, h) = (n-h)(n-h-1) / (n(n-1)).
+    REQUIRE_THAT(hyper0(2, 44, 15), WithinAbs((29.0 * 28.0) / (44.0 * 43.0), 1e-6));
+
+    // The other table bound, k > 16.
+    double expected = 1.0;
+    for(unsigned int i = 0 ; i < 15 ; i++)
+        expected *= static_cast<double>(44 - 17 - i) / static_cast<double>(44 - i);
+
+    REQUIRE_THAT(hyper0(17, 44, 15), WithinAbs(expected, 1e-6));
+
+    // And no discontinuity where the cache ends: h = 8 is the last table entry
+    // and h = 9 is the first computed one, so these two straddle the seam.
+    REQUIRE(hyper0(2, 44, 8) > hyper0(2, 44, 9));
+}
+
 TEST_CASE("Evaluator: evalHand in 8-trick round vs short round", "[reckoner][evaluator]")
 {
     const unsigned int n = 4;

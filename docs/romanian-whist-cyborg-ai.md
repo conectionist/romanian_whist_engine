@@ -164,7 +164,7 @@ large part of why it is testable.
 or `handSize[]`, so this has to be settled before the first bid. Note that `makeReckonerSeat()`
 does *not* call `setSeat()` — it cannot, because a seat index does not exist until `start()` has
 built the table. What it does is store a name, and `onGameStarted` matches that name against
-`engine.getPlayers()` to resolve the seat (`src/strategies/ReckonerStrategy.cpp:104-117`).
+`engine.getPlayers()` to resolve the seat (`src/strategies/ReckonerStrategy.cpp:210-234`).
 
 Copy that, with one change: **throw if the name matches nothing.** Reckoner silently leaves its
 seat disengaged and later behaves as though it were seat 0 in a four-player game, which is a
@@ -199,6 +199,10 @@ they are right, which is more than an estimate can claim.
 **Sure winner (leading).** `beaters(c, unseen) == 0`. Nothing left in the game beats it; leading it
 takes the trick, full stop.
 
+In practice, test this against `reachableBeaters()` (§3.3) rather than `beaters()`. A beater that no
+live opponent may legally hold is in the dead pile, so it is not a beater — and that distinction is
+what turns a high probability into a certainty in the late tricks.
+
 **Cannot win (following).** A card that does not beat the trick's current best card cannot take the
 trick, no matter how many players are still to come, because later players can only push the winner
 higher. This is the exactness `TrickHeuristics` is built on — use `CardValidator::getWinningCard()`
@@ -207,24 +211,48 @@ strategy and the referee cannot drift apart.
 
 There is a third, narrower certainty that pays for itself in the endgame:
 
-**Sure loser (leading).** If nothing is dead (`|unseen| == H`, which is every 8-trick round and the
-late tricks of any round), and no live card of `suit(c)` ranks below `c`, and no opponent is void in
-`suit(c)`, then whoever holds the top live card of the suit is *forced* to play it, and `c` loses.
-That is the exact form of the reasoning in §7.5.
+**Sure loser (leading).** Three conditions, and **the first is the one that is easy to forget**:
+
+1. **A beater exists at all** — `reachableBeaters(c, unseen) != 0`.
+2. Nothing is dead (`|unseen| == H`, which is every 8-trick round and the late tricks of any round).
+3. No live card of `suit(c)` ranks below `c`.
+
+Then whoever holds the top live card of the suit is *forced* to play it, a trump held by a player
+out of the suit is *forced* to ruff, and `c` loses. That is the exact form of the reasoning in §7.5.
+
+Condition 1 is not decoration. Without it the other two are both **vacuously true** for a card
+nothing can beat — hold `A♥` in an 8-trick round with no lower hearts live and conditions 2–3 both
+hold, so the test reports a sure loser for a card that always wins. Check it first.
+
+Test condition 1 with **`reachableBeaters()`**, the same set the sure-winner test uses, not with
+`beaters()`. In a consistent deal they agree here: nothing is dead, so every beater is in a hand, and
+its holder is not void in its suit. They disagree only when the memory contradicts itself — every
+opponent recorded out of hearts while the ace of hearts is still unplayed, which only a missed
+callback can produce — and with `beaters()` that position makes the king a sure winner **and** a sure
+loser at once. The play rules in §6 rely on those two excluding each other, so both must ask the same
+question.
+
+**Do not add "no opponent is void in `suit(c)`".** An earlier version of this section listed it as a
+fourth condition and called it redundant. It is not redundant, it is wrong: a void in a third player's
+hand changes nothing about the beater's holder. With `K♥` led, `A♥` in X's hand and Y known void in
+hearts, X must play the ace or Y ruffs — `c` loses either way, and the extra condition would report
+it as a possible winner. Worse, when only trumps beat `c`, nobody holds the suit at all, so the
+condition fails in every such position.
 
 ### 3.3 P(this wins if I lead it)
 
 ```
 pLeadWins(c):
-    U = unseen ;  B = beaters(c, U)
-    if B == 0: return 1.0                                  // §3.2, sure winner
+    U = unseen
+    if H == 0 or |U| == 0: return 1.0                       // nobody holds a card
+    B = reachableBeaters(c, U)                              // §3.1, void-corrected
+    if B == 0: return 1.0                                   // §3.2, sure winner
     pNoneOut = hyper0(|B|, |U|, H)                          // exact: no beater is in any hand
-    if pNoneOut == 1.0: return 1.0
 
     // A beater is out there. I still win if its holder chooses to duck rather than
     // play it — which they can only do if they hold a lower card of the same suit.
-    Lo   = U & maskSuit(suit(c)) & maskBelow(c, profile)
-    hbar = H / (N − 1)                                      // mean opponent hand size
+    Lo   = U & maskBelow(c, profile)                        // maskBelow is already suit-restricted
+    hbar = max(1, H / (N − 1))                              // mean opponent hand size, floored at 1
     pCanDuck = (|Lo| == 0) ? 0 : 1 − hyper0(|Lo|, |U| − 1, hbar − 1)
     return pNoneOut + (1 − pNoneOut) · DUCK_PROPENSITY · pCanDuck
 ```
@@ -248,11 +276,32 @@ Three things to understand about this function, because it is the load-bearing o
   becomes the entire answer. That is the right shape: in the no-trump rounds, card *counting* beats
   card *odds*, and this formula degrades into counting on its own.
 
-**Void correction.** If a player is known void in `suit(c)` they cannot hold a beater of that suit —
-but they *can* ruff. Subtract their hand from the pool for the suit term and keep them in it for the
-trump term. In practice, compute the suit and trump halves of `B` separately against different
-`H` values: `H_suit` excludes seats void in `suit(c)`, `H_trump` excludes seats void in trump.
-Skipping this is a real accuracy loss late in a round, where most of the useful knowledge lives.
+**Void correction — restrict the pool, not the draw.** If a player is known void in `suit(c)` they
+cannot hold a beater of that suit, though they *can* still ruff. The correction is to drop from `B`
+any card that **no live opponent may legally hold**, because such a card is necessarily in the dead
+pile:
+
+```
+reachableBeaters(c, U):
+    m = 0
+    for each opponent o != me with handSize[o] > 0:
+        if not void(o, suit(c)):                    m |= maskAbove(c, profile) & U
+        if trumpSuit and suit(c) != trumpSuit and not void(o, trumpSuit):
+                                                    m |= maskSuit(trumpSuit) & U
+    return m
+```
+
+With no voids proved this is exactly `beaters(c, U)`, so nothing in §7 changes. Late in a round it
+produces the *certainty* that is the point of tracking voids at all: when every seat that could beat
+you is void, `pLeadWins` is exactly `1.0` — not merely high.
+
+> **Do not split `H` instead.** An earlier version of this section said to compute the suit and trump
+> halves of `B` against different `H` values. That makes `pNoneOut` a product of two
+> hypergeometrics, which is **not** the single one even when no void is known: at `|U| = 30`,
+> `H = 12`, `|B_suit| = 2`, `|B_trump| = 8` the correct value is `0.001456` and the product is
+> `0.002630` — 1.81× too high, with no void involved at all. The two draws are not independent; they
+> come from one deal. Restricting the pool has no such problem, because it changes *what is marked*
+> rather than *how many cards are drawn*.
 
 ### 3.4 P(this holds up if I play it now)
 
@@ -269,6 +318,11 @@ pHolds(c):                                  // c must already beat the current b
 
 A seat known void in the lead suit contributes only trumps to `B`. A seat void in both contributes
 nothing — it cannot beat you at all, and that is a certainty, not an estimate.
+
+A seat with **no** void shown contributes the lead suit **and** trumps. "Not proved void" is not "must
+follow": it may be out of the suit without having shown it yet, and then it must ruff. Counting only
+the lead suit for such a seat reports an unbeatable ace as a certain winner while trumps are live
+behind it.
 
 ---
 
@@ -796,6 +850,22 @@ Written down so the test suite can aim at it.
 | No tempo reasoning | It cannot plan to lose a trick in order to regain the lead later | The `BALANCE` alignment rule approximates it at one ply |
 | Side-suit aces score zero at two tricks | Correct on average, wrong when nobody is void | Accept; the round is worth ±2 |
 
+### An observer removed mid-game is not detected at its cause
+
+`common::RoundMemory::roundInitialised` is set by `initRound()` and **never cleared**. So the §2.4
+guard catches "this strategy was never registered as an observer" but not "this strategy was
+registered, played a round, and then removed". After that, the memory keeps answering from the last
+round it saw.
+
+What catches the *consequence* is `agreesWith()` — the hand no longer matches `live`, so both
+decisions fall through to the heuristic and the bot plays weakly rather than illegally. What is
+missing is an error that names the *cause*.
+
+Inherited from the Phase 0 extraction and shared with `ReckonerStrategy`, which has the same gap.
+Closing it means a `roundComplete()` call or a monotonic round counter on `RoundMemory`, which is a
+change to shared state that both strategies would have to agree on — worth doing deliberately rather
+than as a side effect of Cyborg.
+
 ---
 
 ## 9. Knobs
@@ -844,7 +914,7 @@ tests/CyborgOddsTests.cpp  CyborgBiddingTests.cpp  CyborgStrategyTests.cpp  Cybo
 Add the sources to the `romanian_whist_engine` target in `CMakeLists.txt` and the tests to
 `tests/CMakeLists.txt`. Provide a `makeCyborgSeat(name, engine, knobs)` free function that builds
 the strategy, stores its name and registers it as an observer before returning the `SeatSetup`,
-the way `makeReckonerSeat()` does (`src/strategies/ReckonerStrategy.cpp:198-206`) — a Cyborg that
+the way `makeReckonerSeat()` does (`src/strategies/ReckonerStrategy.cpp:304-312`) — a Cyborg that
 was never registered as an observer degrades to a bot that believes it is seat 0 in a four-player
 game, which is a bug that will not announce itself. See §2.4 for the four guards against it.
 

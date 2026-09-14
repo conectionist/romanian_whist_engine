@@ -24,6 +24,10 @@ add_executable(romanian_whist_engine_tests
     AiMoveProviderTests.cpp
     ReadmeQuickStartTests.cpp
     CardMaskTests.cpp
+    CyborgHalvesTests.cpp
+    CyborgOddsTests.cpp
+    CyborgRobustnessTests.cpp
+    CyborgStrategyTests.cpp
     CyborgMemoryTests.cpp
     EvaluatorTests.cpp
     ReckonerTrackerTests.cpp
