@@ -205,6 +205,7 @@ unsigned int CyborgStrategy::getBestBet(const BetContext& context)
     {
         // std::invalid_argument is one of these. Deliberately not a catch-all:
         // a bad_alloc is not this function's to swallow.
+        ++fallbacksTaken;
         return safestBid();
     }
 }

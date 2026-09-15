@@ -89,6 +89,32 @@ TEST_CASE("CyborgStrategy: a stale memory cannot produce an illegal card", "[cyb
     REQUIRE(strategy.getFallbacksTaken() == 1);
 }
 
+TEST_CASE("CyborgStrategy: a stale memory at the bid is counted as a fallback", "[cyborg][robustness]")
+{
+    CyborgStrategy strategy; // default knobs: section 4 bidding, not the heuristic
+
+    // The memory believes this is a two-trick round...
+    strategy.onRoundStart(4, 2, std::nullopt, 0, 0);
+
+    // ...and is handed three cards, all of which the four-handed deck can encode,
+    // so it is the trick-count check that objects rather than the encoder.
+    const std::vector<Card> hand = { Card{Rank::Ace, Suit::Hearts},
+                                     Card{Rank::King, Suit::Hearts},
+                                     Card{Rank::Queen, Suit::Hearts} };
+
+    const BetContext bet{ hand, std::nullopt, true, std::nullopt, RoundType::Normal };
+
+    unsigned int value = 99;
+    REQUIRE_NOTHROW(value = strategy.getBestBet(bet));
+
+    // The safe answer, whatever three top hearts would otherwise be worth...
+    REQUIRE(value == 0);
+
+    // ...and not a silent one. A memory that is stale on every round would
+    // otherwise bid 0 throughout with the counter reading zero.
+    REQUIRE(strategy.getFallbacksTaken() == 1);
+}
+
 TEST_CASE("CyborgStrategy: a hand its deck cannot encode still gets a legal answer",
           "[cyborg][robustness]")
 {
