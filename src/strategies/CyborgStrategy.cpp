@@ -2,6 +2,7 @@
 
 #include <romanian_whist/AiMoveProvider.h>
 #include <romanian_whist/strategies/TrickHeuristics.h>
+#include <romanian_whist/strategies/cyborg/Bidding.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -33,6 +34,11 @@ bool CyborgStrategy::isSeated() const
 std::size_t CyborgStrategy::getFallbacksTaken() const
 {
     return fallbacksTaken;
+}
+
+const std::optional<Card>& CyborgStrategy::getPlannedLead() const
+{
+    return plannedLead;
 }
 
 const common::RoundMemory& CyborgStrategy::getMemory() const
@@ -148,18 +154,52 @@ unsigned int CyborgStrategy::getBestBet(const BetContext& context)
 
     try
     {
-        // ENCODED FOR THE CHECK, not yet for the answer. The deck profiles are
-        // not nested both ways - a two-handed deck is Jack..Ace and a six-handed
-        // one is Three..Ace - so a memory that believes the table is SMALLER
-        // than it is meets a card its deck has no id for and throws out of
-        // cardsToMask(). That is the one way to learn the memory is describing a
-        // different table than the one being bid at, and a bid is always legal
-        // at 0 (or 1 where 0 is barred), so there is a safe answer to fall to.
-        //
-        // The Cyborg bidding rules will read this mask; the heuristic does not.
-        static_cast<void>(encodeHand(context.hand));
+        const common::Mask myHand = encodeHand(context.hand);
 
-        return heuristicBid(context);
+        if(knobs.useHeuristicBid)
+            return heuristicBid(context);
+
+        // The hand's size IS the round's trick count, and the context is the
+        // authority. A memory that believes otherwise is describing another round.
+        const auto trickCount = static_cast<unsigned int>(context.hand.size());
+        if(trickCount != memory.roundTrickCount)
+            throw std::logic_error("CyborgStrategy::getBestBet: the memory and the hand disagree on the trick count");
+
+        cyborg::BidInputs inputs;
+        inputs.hand = context.hand;
+        inputs.playerCount = memory.playerCount;
+        inputs.trickCount = trickCount;
+        inputs.trump = context.trump;
+        inputs.roundType = context.roundType;
+        inputs.biddingPosition = memory.bidsPlaced();
+        inputs.previousBidSum = memory.previousBidSum();
+
+        inputs.bidsInBiddingOrder.reserve(inputs.biddingPosition);
+        for(unsigned int step = 0; step < inputs.biddingPosition; ++step)
+        {
+            const unsigned int seat = (memory.opener + step) % memory.playerCount;
+            inputs.bidsInBiddingOrder.push_back(memory.bids[seat]);
+        }
+
+        inputs.forbiddenBet = context.forbiddenBet;
+        inputs.odds = cyborg::makeOddsContext(
+            memory, myHand,
+            context.trump ? std::optional(context.trump->suit) : std::nullopt,
+            knobs.duckPropensity);
+
+        const cyborg::BidResult result = cyborg::chooseBid(inputs, knobs);
+
+        // Belt and braces. The rules are built never to produce either of these,
+        // but a bid the engine would refuse deserves the degraded answer, not a
+        // stopped game.
+        if(result.bid > trickCount || (context.forbiddenBet && result.bid == *context.forbiddenBet))
+        {
+            ++fallbacksTaken;
+            return heuristicBid(context);
+        }
+
+        plannedLead = result.plannedLead;
+        return result.bid;
     }
     catch(const std::logic_error&)
     {
@@ -248,6 +288,7 @@ void CyborgStrategy::onGameStarted(const GameEngine& engine)
 
 void CyborgStrategy::onRoundStarted(const GameEngine& engine)
 {
+    plannedLead = std::nullopt;
     memory.initRound(engine.getPlayerCount(), engine.getCurrentRoundTrickCount(),
                      mySeat ? mySeat->index : 0, engine.getRoundLeaderSeat().index,
                      engine.getCurrentTrumpCard());
@@ -272,6 +313,7 @@ void CyborgStrategy::onTrickWon(const GameEngine& /*engine*/, Seat winner,
 void CyborgStrategy::onRoundStart(unsigned int n, unsigned int r, std::optional<Card> trump,
                                   unsigned int openerSeat, unsigned int mySeatIdx)
 {
+    plannedLead = std::nullopt;
     memory.initRound(n, r, mySeatIdx, openerSeat, trump);
 }
 

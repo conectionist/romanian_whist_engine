@@ -19,15 +19,28 @@ struct CyborgKnobs
     // lower it against one that wants tricks.
     float duckPropensity = 0.60f;
 
-    // Which engine gets first refusal at each decision. Both true today because
-    // the Cyborg rules for them are not written yet.
+    // §4.5. Value of a non-contiguous top-of-suit card in eight-trick rounds.
+    float gapCredit = 0.75f;
+
+    // §4.5. Value of a non-contiguous top-of-suit card when not the round leader.
+    float gapCreditFollower = 0.60f;
+
+    // §4.1. Charge the seats still to bid their fair share (R/N each) before
+    // deciding whether to floor or ceil. On by default: measured against the
+    // literal rule, it was a net gain across table sizes.
+    bool useExpectedRemaining = true;
+
+    // §4.5. Refinement for length credit in no-trump rounds.
+    bool useLengthCredit = false;
+
+    // Which engine gets first refusal at each decision.
     //
     // These are NOT a phase seam that later becomes dead code. The heuristics
     // are the strategy's degraded answer, and stay live in every configuration:
     // whenever the round memory disagrees with the position it was handed, both
     // decisions fall back to them rather than to something arbitrary. What these
     // flags change is only who is asked FIRST.
-    bool useHeuristicBid = true;
+    bool useHeuristicBid = false;
     bool useHeuristicPlay = true;
 
     // The configuration under which CyborgStrategy is required to play a game
@@ -42,6 +55,10 @@ struct CyborgKnobs
     {
         CyborgKnobs knobs{};
         knobs.duckPropensity = 0.60f;
+        knobs.gapCredit = 0.75f;
+        knobs.gapCreditFollower = 0.60f;
+        knobs.useExpectedRemaining = false;
+        knobs.useLengthCredit = false;
         knobs.useHeuristicBid = true;
         knobs.useHeuristicPlay = true;
         return knobs;

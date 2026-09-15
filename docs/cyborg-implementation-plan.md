@@ -16,7 +16,7 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 |---|---|---|
 | 0 | Extract `common::RoundMemory`, `common::CardMask`, `common::hyper0` out of Reckoner | ✅ merged, PR #19 |
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
-| 2 | Bidding (design §4) | not started |
+| 2 | Bidding (design §4) | in review — §4.4 and §4.5 revised; A/B still loses at 5–6 players and is pinned, see §4 "Gate" |
 | 3 | The plan and card play (§5, §6.1–§6.4) | not started |
 | 4 | Tournament bar, refinements, documentation, release | not started |
 
@@ -162,7 +162,7 @@ Expected: clang runs one case fewer than GCC (the float-pinned Reckoner test).
 - `include/romanian_whist/strategies/cyborg/Bidding.h`, `src/strategies/cyborg/Bidding.cpp` — namespace
   `romanian_whist::cyborg`, free functions throughout so every rule is testable with no engine.
 - `CyborgKnobs.h` gains the knobs §4 reads, with §9's defaults:
-  `gapCredit = 0.75f`, `gapCreditFollower = 0.60f`, `useExpectedRemaining = false`,
+  `gapCredit = 0.75f`, `gapCreditFollower = 0.60f`, `useExpectedRemaining = true` (measured, see "Gate"),
   `useLengthCredit = false`.
 - Flip `useHeuristicBid`'s default to `false`. `parityWithLowRisk()` already sets it to `true`
   explicitly, so the parity test must keep passing untouched — if it breaks, something is wrong.
@@ -198,7 +198,7 @@ unsigned int bidOneTrickAsLeader(float p);                                      
 unsigned int bidOneTrick(const BidInputs&, const CyborgKnobs&);                       // §4.2
 BidResult    bidTwoTricksAsLeader(const BidInputs&);                                  // §4.3
 float        rawPointsTwoTricks(const std::vector<Card>&, std::optional<Suit>, unsigned int n); // §4.3
-float        rawPointsMidRound(const std::vector<Card>&, std::optional<Suit>, unsigned int n);  // §4.4
+float        rawPointsMidRound(const std::vector<Card>&, const OddsContext&);  // §4.4, as revised in review
 float        countTricksNoTrump(const std::vector<Card>&, unsigned int n,
                                 float gapCredit, bool useLengthCredit);               // §4.5
 unsigned int stepOffForbidden(unsigned int bid, Rounding, std::optional<unsigned int> forbidden,
@@ -235,10 +235,14 @@ Keep the existing shape: `requireMemory`, blind-round early return, then inside 
 - **§4.3 two tricks as leader.** A lookup on the two cards' categories — ten rows, each with a bid **and
   an opening lead**. Store the lead. Not the leader: `raw = 1.0·bigTrumps + 0.5·smallTrumps`, non-trumps
   score nothing, then §4.1.
-- **§4.4 three to seven.** `raw = 0.5·allTrumps + 0.5·bigNonTrumps`, then §4.1.
+- **§4.4 three to seven.** *Revised in review:* each card scores P(nothing an opponent holds beats
+  it) from the odds kit — `hyper0` over the higher unseen cards of its suit, times, for a plain card,
+  P(no opponent is void in that suit). Then §4.1. The half-point rule it replaced ignored the player
+  count.
 - **§4.5 eight tricks.** No trump. Per suit, walk down: `g == 0` → 1.0; `g <= winnersSoFar` →
-  `gapCredit` (use `gapCreditFollower` when not the round leader); else big → 0.5. `LENGTH_CREDIT`
-  stays off unless measured.
+  `gapCredit` (use `gapCreditFollower` when not the round leader); else `g == 1` → 0.5 (*revised in
+  review*: was "else big → 0.5", and "big" grows with the table). `LENGTH_CREDIT` stays off unless
+  measured.
 - **§4.6 barred bid.** Step against the rounding: floored → `+1`, ceiled → `-1`, exact → `-1` (or `1`
   from `0`). Clamp. Do not confuse with `heuristicBid`'s step-down or with `safestBid()`.
 - **§4.7 blind rounds.** Already handled before `BidInputs` is built. Keep `hand` empty for them anyway.
@@ -249,7 +253,7 @@ Use the design document's worked examples as exact fixtures:
 
 - **§7.1** → round leader holding `10♥`, trump `J♥`, 4 players: `p ≈ 0.720443`, bid 1. Assert the
   `6/13` threshold from both sides.
-- **§7.2** → `A♠ 9♠ K♥ 8♥ 7♦`, trump ♠, 4 players: `rawPointsMidRound == 1.5f`; `previousBidSum = 4`
+- **§7.2** → `A♠ 9♠ K♥ 8♥ 7♦`, trump ♠, 4 players: turn-up `8♠`: `rawPointsMidRound ≈ 1.2144` (was `1.5f` under the half-point rule); `previousBidSum = 4`
   → bid 1 `Floored`; `previousBidSum = 1` → bid 2 `Ceiled`.
 - **§7.3** → `A♥ K♥ J♥ A♦ Q♦ 9♦ 8♠ 7♣`, no trump: `countTricksNoTrump == 4.50f`; per suit
   `A K J` → 2.75, `A K 10` → 2.75, `A K Q J` → 4.00, `A Q` → 1.75. As round leader: bid **5** with
@@ -271,6 +275,16 @@ averages higher.
 **Do not use "beats LowRisk" as the Phase 2 gate.** §4 bids ambitiously and heuristic play has no plan
 to deliver those bids, so Phase 2 may score *worse* in absolute terms. If even the A/B fails, **report
 it rather than tuning knobs until it passes** — that is design information the user needs.
+
+**What happened (review of Phase 2).** The A/B failed as first written: §4 bidding lost at 4–6 players
+(−7.6, −21.6, −35.9 points a game) and won at 2–3. A breakdown by round size showed §4.4's half-point
+rule scoring about 0.31 per card at every table size against a fair share of `1/N`, and §4.5's
+"big card → 0.5" branch growing with the table the same way. With the user, §4.4 became the
+odds-priced rule, §4.5's branch became `g == 1`, and `useExpectedRemaining` was turned on — each
+candidate measured on seed ranges the diagnosis had not used. Result per game against heuristic
+bidding: +3.9, +5.7, +0.3, −3.3, −4.5 at 2–6 players. The gate still fails at 5–6, so
+`CyborgTournamentTests` **pins** the exact totals per table size instead of asserting a winner; Phase
+3's card play is expected to move them, and they are re-pinned deliberately when it does.
 
 ---
 
@@ -369,9 +383,9 @@ plays is legal and `fallbacksTaken == 0`.
 
 ### Refinements — measure, then decide
 
-`useExpectedRemaining` (§4.1) and `useLengthCredit` (§4.5) stay off unless a tournament shows they
-win. §7.3 is the case `useExpectedRemaining` exists for: the literal rule makes a round leader bid 5
-where 4 is right.
+`useExpectedRemaining` (§4.1) was measured in Phase 2's review and is now on by default; §7.3 is the
+case it exists for, where the literal rule makes a round leader bid 5 and 4 is right. `useLengthCredit`
+(§4.5) stays off unless a tournament shows it wins.
 
 ### Documentation
 

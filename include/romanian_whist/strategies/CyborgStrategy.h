@@ -40,6 +40,7 @@ private:
     cyborg::CyborgKnobs knobs;
     std::optional<Seat> mySeat;
     std::string playerName;
+    std::optional<Card> plannedLead;
 
     // How many decisions fell through to the heuristic because the memory did
     // not agree with the position it was handed. Zero for a whole game is the
@@ -58,6 +59,7 @@ public:
 
     bool isSeated() const;
     std::size_t getFallbacksTaken() const;
+    const std::optional<Card>& getPlannedLead() const;
 
     const common::RoundMemory& getMemory() const;
     common::RoundMemory& getMemory();
