@@ -35,7 +35,7 @@ Four components. Only the first is new state; the rest are pure functions over i
 |---|---|---|
 | **Memory** (§2) | Everything seen this round: cards played and by whom, bids, proved voids, the dead turn-up | O(1) per observed card |
 | **Odds kit** (§3) | `beaters()`, `pLeadWins()`, `pHolds()` and the two exact certainty tests, over the live-card set | ~1 µs |
-| **Bidding** (§4) | Round-size-specific rules: probability for 1 trick, a shape table for 2, half-point sums for 3–7, aces-and-runs for 8 | ~5 µs |
+| **Bidding** (§4) | Round-size-specific rules: probability for 1 trick, a shape table for 2, per-card odds for 3–7, aces-and-runs for 8 | ~5 µs |
 | **Plan + play** (§5, §6) | Intended winners / intended losers, a DUCK / TAKE / BALANCE mode, and a card choice per mode | ~10 µs |
 
 The odds kit is the piece worth building first and building well: the same `pLeadWins()` that decides
@@ -356,7 +356,7 @@ tricks have to land somewhere and some of them will land on you — round up.
 > inverted (`0.5 → 1` labelled *floor*, `0.5 → 0` labelled *ceil*). The words are the intent and the
 > 3–7-trick examples confirm it: floor when over-subscribed, ceil when under-subscribed.
 
-**Optional refinement — `USE_EXPECTED_REMAINING` (default off).** As written, the test ignores the
+**Refinement — `USE_EXPECTED_REMAINING` (default on).** As written, the test ignores the
 seats who have not bid yet, which systematically inflates the round leader's bid: with
 `previousBidSum = 0` an opener almost always ceils. Charging the unbid seats their fair share fixes
 it without touching the rule's shape:
@@ -367,8 +367,9 @@ if previousBidSum + raw + expectedRemaining > R: floor else ceil
 ```
 
 On an 8-trick round with `raw = 4.5` and four players, the literal rule bids 5 and this one bids 4.
-On the shorter rounds the two agree almost always. Ship it off, measure it on
-(`CyborgTournamentTests`), turn it on if it wins.
+It shipped off and was then measured (1,600 seat-balanced games per table size against heuristic
+bidding, with §4.4 and §4.5 as they now stand): a net gain, better at 2, 3, 5 and 6 players and
+slightly worse at 4, so it is on.
 
 ### 4.2 One-trick rounds
 
@@ -468,17 +469,46 @@ round.
 
 ### 4.4 Three- to seven-trick rounds
 
+Each card scores the probability that nothing an opponent holds can beat it, priced with the odds of §3:
+
 ```
-raw = 0.5 · (all trumps) + 0.5 · (big non-trumps)
+rawMidRound(hand):
+    raw = 0
+    for c in hand:
+        higher = unseen cards of c's suit ranked above c              // the turn-up is dead, not unseen
+        p = hyper0(|higher|, |unseen|, handsOutstanding)              // no opponent holds one
+        if c is not a trump:
+            suitUnseen = unseen cards of c's suit
+            for each opponent s:
+                p *= 1 − hyper0(|suitUnseen|, |unseen|, handSize[s])  // s still holds the suit: no ruff
+        raw += p
+    return raw
+
 bid = resolveFraction(raw, previousBidSum, R)
 ```
 
-Big and small trumps score the same half-point here, unlike §4.3. That discontinuity is deliberate:
-with three or more tricks the round is long enough that a small trump gets a chance to be the last
-trump standing, which is worth as much as a big one that gets over-ruffed early.
+A trump that no unseen trump outranks scores exactly 1. Every other card scores less, and less again
+at a bigger table: more opponents means more hands a higher card can be in, and more chances that one
+of them is void in a plain suit. That is the point of the rule — the bid falls with the player count
+the way the fair share of tricks, `R / N`, does.
 
-Clamp to `[0, R]` before returning — with six players and a long trump holding, `raw` can exceed the
-round's trick count.
+> **Why not half-points.** This section first read `raw = 0.5 · (all trumps) + 0.5 · (big non-trumps)`.
+> A random hand scores about 0.31 of those points per card *at every table size* — a quarter of the
+> cards are trumps, and half of the rest are big — while a card's fair share of tricks is `1/N`. So
+> it under-bid at two players, was about right at three, and at six bid 1.7 tricks a round against
+> 0.9 won. Rescaling it to the fair share fixed the average but not which hands it rated highly: it
+> still hit its bid far less often than `LowRiskStrategy`. Measured over 1,600 seat-balanced games per
+> table size against heuristic bidding, heuristic play on both sides, this rule together with §4.5's
+> `g == 1` branch and `USE_EXPECTED_REMAINING` moved six players from −35.9 points a game to −4.5.
+
+The rule approximates in three places, each pessimistic. Opponents' hands are treated as independent
+draws for the void test; a void opponent is assumed to hold a trump to ruff with; and each card is
+priced alone, so a long trump suit — whose small trumps win once the big ones are drawn — scores less
+than it is worth. It also still loses 3–7 trick rounds to `LowRiskStrategy`'s bidding at four to six
+players, which is partly that heuristic play rewards bidding low; §6 is where that is expected to move.
+
+`resolveFraction` clamps to `[0, R]`, but the clamp never binds: every rule in §4.3–§4.5 scores at most
+1.0 per card, so `raw ≤ R`.
 
 ### 4.5 Eight-trick rounds
 
@@ -497,8 +527,8 @@ countTricks(hand):
                 raw += 1.0 ; winnersSoFar += 1                  // top of the suit: a certain trick
             else if g <= winnersSoFar:
                 raw += GAP_CREDIT ; winnersSoFar += 1           // likely: my higher cards flush the gap
-            else if isBig(c):
-                raw += 0.5
+            else if g == 1:
+                raw += 0.5                                      // one stranger above: a fair chance it falls first
     return raw
 
 bid = resolveFraction(raw, previousBidSum, 8)
@@ -520,6 +550,14 @@ spec's own examples:
 - `A K Q J` — all `g = 0` → 4.0, and the gap branch never fires.
 - `A Q` — queen has `g = 1` (the king), `winnersSoFar = 1` → credited. Suit total 1.75, which is
   optimistic for what is really a finesse; this is the case `GAP_CREDIT` is tuned against.
+
+The third branch scores a card that is neither the top of its suit nor flushed by my own leads. It
+gets half a trick only when exactly one card it does not hold ranks above it. The whole deck is dealt
+and every trick takes `N` cards, so a suit of `2N` goes round about twice, and a card with two or more
+strangers above it almost never lives to win. The branch first read `else if isBig(c)`, and "big" is
+the top `N` ranks: the right cut at two players, but at six it gave half a trick to a nine with five
+strangers above it. Measured against heuristic bidding, the change turned eight-trick rounds at four to
+six players from a loss of 3–11 points a game into a gain of about one.
 
 `GAP_CREDIT` defaults to 0.75. Lower it to 0.6 when not the round leader: cashing a gap winner
 requires being on lead in that suit repeatedly, and a seat that does not open the round may never get
@@ -550,6 +588,8 @@ if we floored: bid += 1
 elif we ceiled: bid -= 1
 else:           bid = (bid > 0) ? bid − 1 : 1     // integer estimate: prefer shedding a trick
 clamp to [0, R]
+if bid is still forbiddenBet:                     // the clamp undid the step, at 0 or at R
+    step the other way from the original bid
 ```
 
 Stepping *down* on an integer estimate is `LowRiskStrategy`'s reasoning and it holds here: giving
@@ -774,22 +814,33 @@ as the table grows, and always in the direction of over-confidence.
 
 ### 7.2 A five-trick round, third to bid (4 players, trump ♠)
 
-Hand: `A♠ 9♠ K♥ 8♥ 7♦`. Big cards at four players are `A K Q J`.
+Hand: `A♠ 9♠ K♥ 8♥ 7♦`; the turn-up is `8♠`. Unseen: 32 − 1 − 5 = 26 cards, of which the three
+opponents hold `H = 15`. One opponent's five cards miss every heart with probability
+`hyper0(6, 26, 5) = 0.236` (six hearts unseen), and every diamond with `hyper0(7, 26, 5) = 0.177`.
 
 ```
-trumps:          A♠, 9♠      → 2 × 0.5 = 1.0
-big non-trumps:  K♥          → 1 × 0.5 = 0.5
-                                raw    = 1.5
+A♠   no higher trump                                           → 1.000
+9♠   10 J Q K♠ above:  hyper0(4, 26, 15)                        → 0.022
+K♥   A♥ above:         hyper0(1, 26, 15) × (1 − 0.236)³ = 0.423 × 0.446 → 0.189
+8♥   9 10 J Q A♥ above: hyper0(5, 26, 15) × (1 − 0.236)³        → 0.003
+7♦   seven ♦ above:    hyper0(7, 26, 15) × (1 − 0.177)³        → 0.000
+                                                          raw   = 1.214
 ```
+
+One seat is still to bid, so `USE_EXPECTED_REMAINING` charges it `5/4 = 1.25`:
 
 | Bids before me | Test | Bid |
 |---|---|---|
-| 2, 2 → sum 4 | `4 + 1.5 > 5` → floor | **1** |
-| 0, 1 → sum 1 | `1 + 1.5 ≤ 5` → ceil | **2** |
+| 2, 2 → sum 4 | `4 + 1.214 + 1.25 > 5` → floor | **1** |
+| 0, 1 → sum 1 | `1 + 1.214 + 1.25 ≤ 5` → ceil | **2** |
 
 The same five cards, two different bids. That is the rounding rule doing its whole job: with four
 tricks already claimed out of five the ace of trumps is your only reliable prize, and with one
 claimed out of five somebody has to take the rest.
+
+Under the half-point rule this hand scored 1.5, and the king of hearts alone was worth half a trick.
+Priced, it is worth under a fifth of one: an opponent holds the ace with probability 15/26, and even
+when nobody does, each of three opponents has nearly a one-in-four chance of being out of hearts.
 
 ### 7.3 An eight-trick round, leading (4 players, no trump)
 
@@ -797,13 +848,13 @@ Hand: `A♥ K♥ J♥  A♦ Q♦ 9♦  8♠  7♣`.
 
 ```
 ♥  A: g=0 → 1.00   K: g=0 → 1.00   J: g=1 (Q) ≤ 2 → 0.75          = 2.75
-♦  A: g=0 → 1.00   Q: g=1 (K) ≤ 1 → 0.75   9: g=3 > 1, small → 0  = 1.75
-♠  8: small → 0        ♣  7: small → 0                            = 0
+♦  A: g=0 → 1.00   Q: g=1 (K) ≤ 1 → 0.75   9: g=3 → 0             = 1.75
+♠  8: g=6 → 0          ♣  7: g=7 → 0                              = 0
                                                             raw   = 4.50
 ```
 
-Literal rule: opener, `previousBidSum = 0`, `0 + 4.5 ≤ 8` → ceil → **bid 5**.
-With `USE_EXPECTED_REMAINING`: `0 + 4.5 + 3·(8/4) = 10.5 > 8` → floor → **bid 4**.
+Literal §4.1 rule: opener, `previousBidSum = 0`, `0 + 4.5 ≤ 8` → ceil → bid 5.
+With `USE_EXPECTED_REMAINING`, the default: `0 + 4.5 + 3·(8/4) = 10.5 > 8` → floor → **bid 4**.
 
 Four is the better bid — `A♥ K♥ A♦` are solid, the `J♥` is likely, the `Q♦` is a guess — and this is
 the case that refinement exists for.
@@ -878,7 +929,7 @@ than as a side effect of Cyborg.
 | `HOLD_THRESHOLD` | 0.50 | Minimum `pHolds()` before paying for a trick with players still to act. |
 | `SLACK` | 0.75 | Distance from plan before switching to `TAKE` or `SHED`. |
 | `ENDGAME_CARDS` | 8 | Unseen-card count at which §6.5 replaces estimation with enumeration. |
-| `USE_EXPECTED_REMAINING` | off | The §4.1 refinement. |
+| `USE_EXPECTED_REMAINING` | on | The §4.1 refinement. Measured as a net gain, so on by default. |
 | `LENGTH_CREDIT` | off | The §4.5 refinement. |
 
 These are development tuning, not a difficulty dial. **Cyborg ships as one strength.** It has no

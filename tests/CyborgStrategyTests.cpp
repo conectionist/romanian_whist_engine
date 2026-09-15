@@ -219,3 +219,25 @@ TEST_CASE("CyborgStrategy: two Cyborgs at one table each find their own seat", "
     REQUIRE_NOTHROW(engine.run());
     REQUIRE(engine.getStatus() == GameStatus::Finished);
 }
+
+TEST_CASE("CyborgStrategy: a two-trick lead planned while bidding lasts until the next round", "[cyborg]")
+{
+    // Section 4.3: leading a two-trick round, the bid and the opening lead are one
+    // decision, so the lead has to be kept for card play - and must not leak into
+    // a round it was not made for.
+    CyborgStrategy strategy; // default knobs: section 4 bidding gets first refusal
+
+    const Card turnUp{Rank::Seven, Suit::Diamonds};
+    strategy.onRoundStart(4, 2, turnUp, 0, 0);
+
+    const std::vector<Card> hand{Card{Rank::Queen, Suit::Diamonds}, Card{Rank::King, Suit::Diamonds}};
+    const BetContext context{hand, turnUp, true, std::nullopt, RoundType::Normal};
+
+    // Two big trumps: bid 2, lead the higher.
+    REQUIRE(strategy.getBestBet(context) == 2);
+    REQUIRE(strategy.getPlannedLead() == std::optional<Card>{Card{Rank::King, Suit::Diamonds}});
+    REQUIRE(strategy.getFallbacksTaken() == 0);
+
+    strategy.onRoundStart(4, 3, turnUp, 1, 0);
+    REQUIRE_FALSE(strategy.getPlannedLead().has_value());
+}
