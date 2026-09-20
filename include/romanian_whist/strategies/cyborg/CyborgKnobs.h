@@ -33,6 +33,15 @@ struct CyborgKnobs
     // §4.5. Refinement for length credit in no-trump rounds.
     bool useLengthCredit = false;
 
+    // §6.2. The minimum pHolds() worth paying for a trick with players still to
+    // act. Below it, the cheapest card that beats the current winner is a card
+    // spent on a trick somebody later will take anyway.
+    float holdThreshold = 0.50f;
+
+    // §5. How far the hand may drift from its plan before the mode changes -
+    // below the bid into TAKE, above it into SHED.
+    float slack = 0.75f;
+
     // Which engine gets first refusal at each decision.
     //
     // These are NOT a phase seam that later becomes dead code. The heuristics
@@ -59,6 +68,8 @@ struct CyborgKnobs
         knobs.gapCreditFollower = 0.60f;
         knobs.useExpectedRemaining = false;
         knobs.useLengthCredit = false;
+        knobs.holdThreshold = 0.50f;
+        knobs.slack = 0.75f;
         knobs.useHeuristicBid = true;
         knobs.useHeuristicPlay = true;
         return knobs;

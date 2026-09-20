@@ -16,8 +16,8 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 |---|---|---|
 | 0 | Extract `common::RoundMemory`, `common::CardMask`, `common::hyper0` out of Reckoner | ✅ merged, PR #19 |
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
-| 2 | Bidding (design §4) | in review — §4.4 and §4.5 revised; A/B still loses at 5–6 players and is pinned, see §4 "Gate" |
-| 3 | The plan and card play (§5, §6.1–§6.4) | not started |
+| 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
+| 3 | The plan and card play (§5, §6.1–§6.4) | in progress — split into 3a (modules, default off) and 3b (flip the default, re-pin) |
 | 4 | Tournament bar, refinements, documentation, release | not started |
 
 Baseline on master after Phase 1: **148 test cases on GCC Release and Debug, 147 on clang** (one

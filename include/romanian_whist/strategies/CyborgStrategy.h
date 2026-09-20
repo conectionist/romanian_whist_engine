@@ -42,6 +42,11 @@ private:
     std::string playerName;
     std::optional<Card> plannedLead;
 
+    // The suit of the last card this seat led, and empty until it leads one.
+    // §6.1's cashing rule finishes a suit before starting another, and this is
+    // the only thing it needs to remember across tricks.
+    std::optional<Suit> cashingSuit;
+
     // How many decisions fell through to the heuristic because the memory did
     // not agree with the position it was handed. Zero for a whole game is the
     // healthy answer, and asserting that is what turns "the guard never fires
@@ -60,6 +65,7 @@ public:
     bool isSeated() const;
     std::size_t getFallbacksTaken() const;
     const std::optional<Card>& getPlannedLead() const;
+    const std::optional<Suit>& getCashingSuit() const;
 
     const common::RoundMemory& getMemory() const;
     common::RoundMemory& getMemory();
@@ -106,6 +112,16 @@ private:
     unsigned int heuristicBid(const BetContext& context) const;
     std::optional<Card> heuristicPlay(const PlayContext& context,
                                       const std::vector<Card>& legal) const;
+
+    // The section 5 plan and the section 6 card choice, over the legal list the
+    // caller already computed from the context. Throws through the odds kit for
+    // a hand the memory cannot describe, which the caller contains.
+    std::optional<Card> cyborgPlay(const PlayContext& context, const std::vector<Card>& legal,
+                                   common::Mask myHand) const;
+
+    // Remembers the suit of a card this seat LED, which is all §6.1's cashing
+    // rule needs to carry from one trick to the next.
+    void noteLead(const PlayContext& context, const Card& played);
 };
 
 // Builds a Cyborg seat and registers it as an observer of `engine`, which must

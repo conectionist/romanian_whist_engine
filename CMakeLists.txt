@@ -31,6 +31,8 @@ add_library(romanian_whist_engine STATIC
     src/strategies/reckoner/RolloutEngine.cpp
     src/strategies/cyborg/Odds.cpp
     src/strategies/cyborg/Bidding.cpp
+    src/strategies/cyborg/Plan.cpp
+    src/strategies/cyborg/Play.cpp
     src/strategies/CyborgStrategy.cpp
     src/strategies/ReckonerStrategy.cpp
 )

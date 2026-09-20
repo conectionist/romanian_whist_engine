@@ -709,6 +709,22 @@ credited your `J♥` on the assumption that leading `A♥` and `K♥` first woul
 cashes the ace and then switches suits, the bid was a lie. Lead the ace, then the king, then the
 jack, in that suit, before starting another.
 
+**Correction, found implementing this.** "The suit where I hold the most cards" cannot produce that
+sequence by itself: once `A♥` is gone hearts is the *shorter* suit, and the rule switches to diamonds
+before the jack is cashed — §7.3's own example contradicts the line above it. So the rule carries one
+piece of state: **keep cashing the suit you last led while it still holds a certainty**, and choose by
+length only when it does not. That is `PlaySituation::cashingSuit`, set from the card this seat led,
+and it is the only thing card play remembers from one trick to the next.
+
+**Where the pseudocode and the prose disagree, the prose wins.** `TAKE` with no sure winner leads the
+lowest card of the longest suit, not `argmax pLeadWins`: leading the best card you hold into an
+unknown table is exactly what the "no aces" paragraph below says not to do.
+
+Two edges the pseudocode leaves open, settled in the implementation: when every legal card is a sure
+winner, `SHED` has nothing to shed and spends the cheapest of them instead of the dearest; and
+`BALANCE` counts itself ahead of plan when the winners it holds already cover what is owed
+(`expected >= need`), which is when it leads a loser rather than cashing.
+
 **No aces, and needing tricks.** Do not lead a big card into an unknown table — whoever holds the
 card above it simply takes it, and you have spent your best card for nothing. Lead your *lowest*
 card in your longest suit instead: it flushes the guards, costs nothing, and gives your big cards a

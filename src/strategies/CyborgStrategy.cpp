@@ -3,6 +3,7 @@
 #include <romanian_whist/AiMoveProvider.h>
 #include <romanian_whist/strategies/TrickHeuristics.h>
 #include <romanian_whist/strategies/cyborg/Bidding.h>
+#include <romanian_whist/strategies/cyborg/Play.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -39,6 +40,11 @@ std::size_t CyborgStrategy::getFallbacksTaken() const
 const std::optional<Card>& CyborgStrategy::getPlannedLead() const
 {
     return plannedLead;
+}
+
+const std::optional<Suit>& CyborgStrategy::getCashingSuit() const
+{
+    return cashingSuit;
 }
 
 const common::RoundMemory& CyborgStrategy::getMemory() const
@@ -210,6 +216,45 @@ unsigned int CyborgStrategy::getBestBet(const BetContext& context)
     }
 }
 
+std::optional<Card> CyborgStrategy::cyborgPlay(const PlayContext& context,
+                                               const std::vector<Card>& legal,
+                                               common::Mask myHand) const
+{
+    // Three things here can throw, and all of them are the fallback working:
+    // makeOddsContext() when the memory and the context disagree about trump,
+    // and buildPlan()/choosePlay() through cardToId() for a deck the memory
+    // cannot describe. The caller's catch turns each into the heuristic.
+    const cyborg::OddsContext odds = cyborg::makeOddsContext(
+        memory, myHand, context.trump ? std::optional(context.trump->suit) : std::nullopt,
+        knobs.duckPropensity);
+
+    const cyborg::Plan plan = cyborg::buildPlan(myHand, context.bet, context.tricksWon, odds, knobs);
+
+    // Everything below comes from the context and the legal list the caller
+    // already computed. The memory reaches this decision only through `odds`,
+    // which is about what the OTHER hands might hold.
+    cyborg::PlaySituation situation;
+    situation.hand = context.hand;
+    situation.legal = legal;
+    situation.playedCards = context.playedCards;
+    situation.trump = context.trump;
+    situation.leadSuit = context.leadSuit;
+    situation.plannedLead = plannedLead;
+    situation.cashingSuit = cashingSuit;
+    situation.playerCount = memory.playerCount;
+
+    return cyborg::choosePlay(situation, plan, odds, knobs);
+}
+
+void CyborgStrategy::noteLead(const PlayContext& context, const Card& played)
+{
+    // Only a card this seat LED starts or continues a cashing run. A card played
+    // to somebody else's trick says nothing about which suit this hand is
+    // working through, and recording it would send §6.1 chasing the opener's.
+    if(context.playedCards.empty())
+        cashingSuit = played.suit;
+}
+
 std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
 {
     requireMemory("getBestChoice");
@@ -234,7 +279,10 @@ std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
         const common::Mask myHand = encodeHand(context.hand);
 
         if(agreesWith(myHand, context.hand.size(), context.playedCards.size()))
-            chosen = heuristicPlay(context, legal);
+        {
+            chosen = knobs.useHeuristicPlay ? heuristicPlay(context, legal)
+                                            : cyborgPlay(context, legal, myHand);
+        }
     }
     catch(const std::logic_error&)
     {
@@ -243,7 +291,10 @@ std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
     }
 
     if(chosen && std::find(legal.begin(), legal.end(), *chosen) != legal.end())
+    {
+        noteLead(context, *chosen);
         return chosen;
+    }
 
     // Either the memory disagreed with the position or it could not describe it.
     // ReckonerStrategy settles for legal.front() here because it has no cheaper
@@ -252,8 +303,12 @@ std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
     fallbacksTaken++;
 
     if(const std::optional<Card> fallback = heuristicPlay(context, legal))
+    {
+        noteLead(context, *fallback);
         return fallback;
+    }
 
+    noteLead(context, legal.front());
     return legal.front();
 }
 
@@ -290,6 +345,7 @@ void CyborgStrategy::onGameStarted(const GameEngine& engine)
 void CyborgStrategy::onRoundStarted(const GameEngine& engine)
 {
     plannedLead = std::nullopt;
+    cashingSuit = std::nullopt;
     memory.initRound(engine.getPlayerCount(), engine.getCurrentRoundTrickCount(),
                      mySeat ? mySeat->index : 0, engine.getRoundLeaderSeat().index,
                      engine.getCurrentTrumpCard());
@@ -315,6 +371,7 @@ void CyborgStrategy::onRoundStart(unsigned int n, unsigned int r, std::optional<
                                   unsigned int openerSeat, unsigned int mySeatIdx)
 {
     plannedLead = std::nullopt;
+    cashingSuit = std::nullopt;
     memory.initRound(n, r, mySeatIdx, openerSeat, trump);
 }
 
