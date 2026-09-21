@@ -252,11 +252,14 @@ CyborgStrategy::PlayDecision CyborgStrategy::cyborgPlay(const PlayContext& conte
     if(!chosen)
         return PlayDecision{};
 
-    // Was this a cash? Only a TAKE-mode lead of a sure winner is - §7.3's A, K,
-    // J run is three of them in a row, while a DUCK or BALANCE lead of a junk
-    // card is not one and must not leave a hint behind. Asking isSureWinner()
+    // Was this a cash? Only a lead of a sure winner chosen by §6.1's cashing rules
+    // is - §7.3's A, K, J run is three of them in a row, while a DUCK lead of a
+    // junk card is not one and must not leave a hint behind. TAKE always leads by
+    // those rules; BALANCE does when there is no trump. Asking isSureWinner()
     // again is cheaper than threading an answer out of every rule in §6.1.
-    const bool cashing = plan.mode == cyborg::Mode::Take && context.playedCards.empty() &&
+    const bool cashingRules = plan.mode == cyborg::Mode::Take ||
+                              (plan.mode == cyborg::Mode::Balance && !context.trump);
+    const bool cashing = cashingRules && context.playedCards.empty() &&
                          cyborg::isSureWinner(common::cardToId(*chosen, odds.playerCount), odds);
 
     return PlayDecision{chosen, cashing};

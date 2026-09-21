@@ -639,6 +639,7 @@ rebuild():
     elif need >= rem                 : mode = TAKE
     elif expected < need − SLACK      : mode = TAKE      // behind plan: grab what you can
     elif surplus > SLACK              : mode = SHED      // hand is too strong for the bid
+                                                          // (no trump: surplus counts certainties only)
     else                             : mode = BALANCE
 ```
 
@@ -697,7 +698,9 @@ lead():
         tie-break: among cards of near-equal (low) win chance, lead the DEAREST
                    (isMoreDangerous: any trump above any plain card, rank within that)
     if mode == BALANCE:
-        if my winners are non-trump and trumps are still live:
+        if there is no trump:
+            lead exactly as TAKE does                   // cash the certainties while on lead
+        elif my winners are non-trump and trumps are still live:
             cash the best winner now — it is only getting more ruffable
         elif every winner is a certainty: lead the safest loser   // the bid is already paid for
         else:                             lead argmax pLeadWins among `winners`
@@ -946,7 +949,7 @@ Written down so the test suite can aim at it.
 | Bid and play can disagree | §4.5 credits gap winners that §6.1 must then cash correctly | Test it directly: assert the eight-card lead order |
 | No tempo reasoning | It cannot plan to lose a trick in order to regain the lead later | The `BALANCE` alignment rule approximates it at one ply |
 | Side-suit aces score zero at two tricks | Correct on average, wrong when nobody is void | Accept; the round is worth ±2 |
-| `SHED` and `BALANCE` leads without trumps | With every card dealt, `pLeadWins` is 0 for any card with a higher card still out, apart from the duck term, so these two leads choose by that term. Measured, §6 play lost 1.3–5.9 points a game to heuristic play at 3–6 players, almost all of it in no-trump rounds | Heuristic play stays the default until the two leads are redesigned for no-trump rounds (Phase 3c) |
+| `pLeadWins` is nearly blind without trumps | With every card dealt, it is 0 for any card with a higher card still out, apart from the duck term. As first written, the `BALANCE` lead and the `SHED` test read that term as strength and §6 play lost 1.3–5.9 points a game to heuristic play at 3–6 players | Without trumps, `BALANCE` leads as `TAKE` does and `SHED` counts only certainties (Phase 3c). Now level or ahead except about −1 at five players; other rules that rank uncertain no-trump cards by `pLeadWins` deserve the same suspicion |
 
 ### An observer removed mid-game is not detected at its cause
 

@@ -17,7 +17,7 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 | 0 | Extract `common::RoundMemory`, `common::CardMask`, `common::hyper0` out of Reckoner | ✅ merged, PR #19 |
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
 | 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
-| 3 | The plan and card play (§5, §6.1–§6.4) | 3a ✅ merged, PR #22 (`f634301`); 3b in review — measured, default stays heuristic play; 3c redesigns the no-trump leads, see §5 |
+| 3 | The plan and card play (§5, §6.1–§6.4) | 3a ✅ PR #22 (`f634301`); 3b ✅ PR #23 (`c488cb3`), measurement only; 3c in review — no-trump leads fixed, §6 play is the default, see §5 |
 | 4 | Tournament bar, refinements, documentation, release | not started |
 
 Baseline on master after Phase 1: **148 test cases on GCC Release and Debug, 147 on clang** (one
@@ -390,6 +390,18 @@ no-trump rounds, and the pinned A/Bs will show the result.
 Bidding under §6 play (§4 against heuristic bidding): +15.0, +8.1, +1.5, −3.7, −6.1. The bidding
 re-calibration decision waits for 3c, since those numbers come from play known to under-take without
 trumps.
+
+**3c.** Six candidate no-trump rules were measured in scratch on the pinned seeds, a confirmation range
+and a fresh 160-seed sample, against a reference that simply led as the heuristic does. The one shipped
+changes two things, both only when there is no trump: the **BALANCE lead runs TAKE's cashing rules**
+(nothing can ruff, so a certainty is lost only by losing the lead or being forced to discard it), and
+**SHED is entered on certainties** (the duck term, summed over a hand, made ordinary hands look
+over-strong). A third change — SHED leading only certain losers — measured as doing nothing once SHED
+stopped misfiring, and was dropped. §6 play against heuristic play, pinned seeds: +6.7, +1.6, +3.1,
+−1.7, +0.4. The agreed flip rule was "even or better at every table size"; the user flipped the default
+anyway, because the five-player loss did not reproduce on two other seed ranges (+1.5, −0.8). Bidding
+under the new play (§4 against heuristic bidding): +15.4, +8.6, +3.9, −1.2, −3.5 — the input to the
+bidding re-calibration decision.
 
 ---
 

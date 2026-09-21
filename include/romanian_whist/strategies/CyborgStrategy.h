@@ -46,8 +46,9 @@ private:
     // not cashing one. §6.1's cashing rule finishes a suit before starting
     // another, and this is the only thing it needs to remember across tricks.
     //
-    // Set only by a lead that was itself a cash - a TAKE-mode lead of a sure
-    // winner - and CLEARED by any other lead. Recording every lead instead would
+    // Set only by a lead that was itself a cash - a lead of a sure winner chosen
+    // by §6.1's cashing rules, which TAKE always uses and BALANCE uses without
+    // trumps - and CLEARED by any other lead. Recording every lead instead would
     // make a DUCK or BALANCE lead of a junk card send §6.1 chasing that suit on a
     // later trick, which is the bug this comment exists to prevent recurring.
     std::optional<Suit> cashingSuit;
@@ -118,8 +119,8 @@ private:
     std::optional<Card> heuristicPlay(const PlayContext& context,
                                       const std::vector<Card>& legal) const;
 
-    // A chosen card, plus whether choosing it was an act of CASHING - a TAKE-mode
-    // lead of a sure winner. Only the decision layer can tell, and it is const,
+    // A chosen card, plus whether choosing it was an act of CASHING - a lead of a
+    // sure winner by §6.1's cashing rules. Only the decision layer can tell, and it is const,
     // so the fact has to travel back out to the non-const caller rather than be
     // recorded in place. See cashingSuit above for why the distinction matters.
     struct PlayDecision
