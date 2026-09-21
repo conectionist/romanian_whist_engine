@@ -70,20 +70,6 @@ std::optional<Card> lowestLiability(const std::vector<Card>& cards, const OddsCo
     return card ? std::optional<Card>(*card) : std::nullopt;
 }
 
-// §6.1's "ahead of plan" test, named because the expression does not say what it
-// means.
-//
-// `expected` is the sum of the `need` best pLeadWins scores and pLeadWins is
-// capped at 1, so expected can never EXCEED need. This `>=` is therefore an
-// equality, and it holds exactly when every card the plan is counting on is a
-// CERTAINTY rather than merely likely - each one having hit one of pLeadWins's
-// literal `return 1.0f` early-outs, which sum exactly. A hand one ULP short, with
-// a 0.99999994f among its winners, is not ahead of plan and cashes instead.
-bool winnersAreCertain(const Plan& plan)
-{
-    return plan.expected >= static_cast<float>(plan.need);
-}
-
 // How many cards the hand holds in each suit, counted ONCE per decision. §6.1's
 // TAKE lead asks in two places and would otherwise rescan the whole hand for
 // every candidate card.
@@ -349,15 +335,19 @@ std::optional<Card> chooseLead(const PlaySituation& situation, const Plan& plan,
                 return highestLiability(plainWinners, odds, scores);
         }
 
-        // Ahead of plan - every winner the plan counts on is a certainty - so lead
-        // the safest loser and keep them for the tricks that need them. Otherwise
-        // cash the dearest winner while it is still worth something.
+        // Otherwise lead the safest loser and keep the winners for the tricks that
+        // need them.
         //
-        // Both lists are non-empty here and need no guard: leading means the legal
-        // list IS the hand, and BALANCE means 1 <= need < hand size, so buildPlan
-        // put at least one card in each.
-        return winnersAreCertain(plan) ? lowestLiability(losers, odds, scores)
-                                       : highestLiability(winners, odds, scores);
+        // This used to cash the dearest winner unless every winner was certain.
+        // Phase 4 measured the alternative the 3a review deferred - "ahead of plan"
+        // when expected >= need - slack - and it won at every table size. But §5
+        // only enters BALANCE when expected >= need - slack (below that is TAKE),
+        // so that test is always true here, and adopting it meant removing the
+        // cashing branch rather than keeping a condition that cannot fail.
+        //
+        // `losers` is non-empty and needs no guard: leading means the legal list
+        // IS the hand, and BALANCE means need < hand size.
+        return lowestLiability(losers, odds, scores);
     }
 
     case Mode::Duck:

@@ -18,8 +18,8 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
 | 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
 | 3 | The plan and card play (§5, §6.1–§6.4) | ✅ merged — 3a PR #22 (`f634301`), 3b PR #23 (`c488cb3`, measurement only), 3c PR #24 (`ff19b42`, §6 play the default) |
-| — | Bidding re-calibration: §4.4 bids by expected score | in review — see the end of §5 |
-| 4 | Tournament bar, refinements, documentation, release | not started |
+| — | Bidding re-calibration: §4.4 bids by expected score | ✅ merged, PR #25 (`b80123c`) — see the end of §5 |
+| 4 | Tournament bar, refinements, documentation, release | in progress — 4a (refinements + tournament bar) in review, then 4b (docs + release 4.3.0) |
 
 Baseline: **148 test cases** after Phase 1; **185 on GCC Release and Debug, 184 on clang** after the
 bidding re-calibration (one Reckoner test is compiled on Linux/GCC only — see §3). CI green on Linux,
@@ -436,12 +436,36 @@ count as a reference. The expected-score bid shipped: +15.5, +12.0, +11.0, +8.9,
 - Do **not** put a Cyborg seat in `tests/GoldenGameTests.cpp`: a tunable strategy there turns every knob
   change into golden-score churn.
 
+**Pinned in 4a**, points a game:
+
+| Bar | Measured | Asserted |
+|---|---|---|
+| 1 Cyborg vs 3 LowRisk (seeds 1000–1019, every seat) | Cyborg 75.3, LowRisk 60.9 | Cyborg > LowRisk + 7 |
+| 1 Cyborg vs 1 Reckoner `medium()` vs 2 LowRisk (15 games) | Reckoner 87.5, Cyborg 72.7, LowRisk 60.2 | Reckoner > Cyborg > LowRisk |
+| Sweep at 2, 3, 5, 6 players (5 seeds, every seat) | +16.2, +10.9, +13.1, +9.4 | Cyborg > LowRisk at each |
+| `S_818` at four players | +3.7 | Cyborg > LowRisk |
+| Latency | about 0.5 µs a decision on Release | mean under 200 µs |
+
+The design's bar held — beat LowRisk comfortably, lose to the Reckoner — although the Reckoner's
+lead (14.7 a game) is wider than "narrowly".
+
 ### Refinements — measure, then decide
 
 `useExpectedRemaining` (§4.1) was measured in Phase 2's review and is now on by default; §7.3 is the
 case it exists for, where the literal rule makes a round leader bid 5 and 4 is right. `useLengthCredit`
 (§4.5) stays off unless a tournament shows it wins. The expected-score bid (§4.4) is also worth
 measuring for two-trick non-leaders and eight-trick rounds, which still round an average with §4.1.
+
+**Measured in 4a** (one Cyborg vs LowRisk on 100 and 300 fresh seeds, the pinned seeds, and
+all-Cyborg tables; adoption rule: better in total against LowRisk, no table size worse by more than
+about a point, in either measure):
+
+| | Refinement | Result |
+|---|---|---|
+| F1 | expected-score bid for two-trick non-leaders | no improvement (−0.2 summed over table sizes on top of F4) — not adopted |
+| F2 | expected-score bid for eight-trick rounds, over §4.5's per-card credits | all-Cyborg tables −1.6 at two players — not adopted |
+| F3 | `useLengthCredit` | worse everywhere, −2.7 a game at six players — stays off |
+| F4 | BALANCE "ahead of plan" within `slack` | +0.1 to +1.0 at every table size — **adopted**; since BALANCE implies the condition, it removed the cashing branch (design §6.1) |
 
 ### Documentation
 
