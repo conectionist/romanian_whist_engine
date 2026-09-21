@@ -17,11 +17,13 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 | 0 | Extract `common::RoundMemory`, `common::CardMask`, `common::hyper0` out of Reckoner | ✅ merged, PR #19 |
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
 | 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
-| 3 | The plan and card play (§5, §6.1–§6.4) | 3a ✅ PR #22 (`f634301`); 3b ✅ PR #23 (`c488cb3`), measurement only; 3c in review — no-trump leads fixed, §6 play is the default, see §5 |
+| 3 | The plan and card play (§5, §6.1–§6.4) | ✅ merged — 3a PR #22 (`f634301`), 3b PR #23 (`c488cb3`, measurement only), 3c PR #24 (`ff19b42`, §6 play the default) |
+| — | Bidding re-calibration: §4.4 bids by expected score | in review — see the end of §5 |
 | 4 | Tournament bar, refinements, documentation, release | not started |
 
-Baseline on master after Phase 1: **148 test cases on GCC Release and Debug, 147 on clang** (one
-Reckoner test is compiled on Linux/GCC only — see §3). CI green on Linux, macOS and Windows.
+Baseline: **148 test cases** after Phase 1; **185 on GCC Release and Debug, 184 on clang** after the
+bidding re-calibration (one Reckoner test is compiled on Linux/GCC only — see §3). CI green on Linux,
+macOS and Windows.
 
 ### What Phase 1 built — the pieces later phases plug into
 
@@ -403,6 +405,16 @@ anyway, because the five-player loss did not reproduce on two other seed ranges 
 under the new play (§4 against heuristic bidding): +15.4, +8.6, +3.9, −1.2, −3.5 — the input to the
 bidding re-calibration decision.
 
+**Bidding re-calibration (after Phase 3).** With §6 play in place, one Cyborg against LowRisk scored
++8.1, +6.7, +5.0, +2.2, −3.8 points a game at 2–6 players, and the whole loss was in 3–7 trick rounds
+at 4–6 players — also in all-Cyborg tables, so Cyborg's own weakness rather than a match-up effect.
+Broken down by bid value, it bid 1 on three hands in four where LowRisk bid 0 about half the time, and 0
+is the most reliable bid to hit: a bidding problem, not a delivery one. Candidates measured in
+scratch: always round down, an **expected-score bid** (§4.2's reasoning generalised: the trick-count
+distribution from §4.4's per-card odds, then the bid with the best expected score), and LowRisk's own
+count as a reference. The expected-score bid shipped: +15.5, +12.0, +11.0, +8.9, +7.0 against LowRisk
+(100 fresh seeds), ahead of the reference at 2–4 players and about 1.5 behind it at 5.
+
 ---
 
 ## 6. Phase 4 — Tournament bar, refinements, documentation, release
@@ -428,7 +440,8 @@ bidding re-calibration decision.
 
 `useExpectedRemaining` (§4.1) was measured in Phase 2's review and is now on by default; §7.3 is the
 case it exists for, where the literal rule makes a round leader bid 5 and 4 is right. `useLengthCredit`
-(§4.5) stays off unless a tournament shows it wins.
+(§4.5) stays off unless a tournament shows it wins. The expected-score bid (§4.4) is also worth
+measuring for two-trick non-leaders and eight-trick rounds, which still round an average with §4.1.
 
 ### Documentation
 
