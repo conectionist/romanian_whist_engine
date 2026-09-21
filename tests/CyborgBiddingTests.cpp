@@ -433,9 +433,20 @@ TEST_CASE("Cyborg bidding: section 7.2 worked example mid-round", "[cyborg]")
         REQUIRE_THAT(rawPointsMidRound(hand, ctx), WithinAbs(1.214384f, 1e-4f));
     }
 
-    SECTION("the same hand bids 1 over-subscribed and 2 under-subscribed")
+    SECTION("it bids the count with the highest expected score, whatever the table has bid")
     {
-        // Default knobs: useExpectedRemaining charges the one seat still to bid 5/4.
+        // The per-card odds above as independent trials. The ace is certain, so
+        // exactly one trick carries most of the weight:
+        // P(1) 0.790, P(2) 0.205, P(3) 0.005.
+        const std::vector<double> dist = trickDistribution(cardWinOdds(hand, ctx), 5);
+        REQUIRE(dist[0] == 0.0);
+        REQUIRE_THAT(dist[1], WithinAbs(0.79049, 1e-4));
+        REQUIRE_THAT(dist[2], WithinAbs(0.20465, 1e-4));
+        REQUIRE_THAT(dist[3], WithinAbs(0.00485, 1e-4));
+
+        // Expected scores: bid 0 -1.214, bid 1 +4.529, bid 2 +0.637. So 1 - and
+        // the bids already made do not move it, where the old rounding rule bid
+        // 1 or 2 depending on them.
         CyborgKnobs knobs{};
 
         BidInputs inputs;
@@ -446,20 +457,46 @@ TEST_CASE("Cyborg bidding: section 7.2 worked example mid-round", "[cyborg]")
         inputs.biddingPosition = 2;
         inputs.odds = ctx;
 
-        // Bids 2, 2 before me: 4 + 1.214 + 1.25 > 5 -> floor -> 1
         inputs.previousBidSum = 4;
         inputs.bidsInBiddingOrder = {2, 2};
-        BidResult res = chooseBid(inputs, knobs);
-        REQUIRE(res.bid == 1);
-        REQUIRE(res.rounding == Rounding::Floored);
+        REQUIRE(chooseBid(inputs, knobs).bid == 1);
 
-        // Bids 0, 1 before me: 1 + 1.214 + 1.25 <= 5 -> ceil -> 2
         inputs.previousBidSum = 1;
         inputs.bidsInBiddingOrder = {0, 1};
-        res = chooseBid(inputs, knobs);
-        REQUIRE(res.bid == 2);
-        REQUIRE(res.rounding == Rounding::Ceiled);
+        REQUIRE(chooseBid(inputs, knobs).bid == 1);
+
+        // Last to bid with 4 already claimed, 1 is barred. The next best is 2,
+        // not 0: the ace makes a bid of 0 a certain miss.
+        inputs.biddingPosition = 3;
+        inputs.previousBidSum = 4;
+        inputs.bidsInBiddingOrder = {2, 1, 1};
+        inputs.forbiddenBet = 1;
+        REQUIRE(chooseBid(inputs, knobs).bid == 2);
     }
+}
+
+TEST_CASE("Cyborg bidding: section 4.4 bids the most valuable count, not the rounded average", "[cyborg]")
+{
+    // Three cards at 0.2, 0.2 and 0.1 average half a trick. Rounding that average
+    // at an under-subscribed table ceils it to 1; but no tricks at all is by far
+    // the likeliest outcome, and a bid of 0 is the most valuable one to make.
+    const std::vector<double> dist = trickDistribution({0.2f, 0.2f, 0.1f}, 3);
+    REQUIRE_THAT(dist[0], WithinAbs(0.576, 1e-6));
+    REQUIRE_THAT(dist[1], WithinAbs(0.352, 1e-6));
+    REQUIRE_THAT(dist[2], WithinAbs(0.068, 1e-6));
+    REQUIRE_THAT(dist[3], WithinAbs(0.004, 1e-6));
+
+    // Expected scores: bid 0 +2.38, bid 1 +1.46, bid 2 -1.03.
+    REQUIRE(expectedScoreBid(dist, std::nullopt) == 0);
+
+    // The section 4.1 rounding of the same average, for contrast.
+    CyborgKnobs literal{};
+    literal.useExpectedRemaining = false;
+    Rounding out = Rounding::Exact;
+    REQUIRE(resolveFraction(0.5f, 0, 3, 3, 4, literal, out) == 1);
+
+    // Barred from 0, the next best is 1.
+    REQUIRE(expectedScoreBid(dist, 0u) == 1);
 }
 
 TEST_CASE("Cyborg bidding: section 4.4 a card is worth less at a bigger table", "[cyborg]")

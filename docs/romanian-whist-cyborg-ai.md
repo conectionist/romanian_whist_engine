@@ -35,7 +35,7 @@ Four components. Only the first is new state; the rest are pure functions over i
 |---|---|---|
 | **Memory** (§2) | Everything seen this round: cards played and by whom, bids, proved voids, the dead turn-up | O(1) per observed card |
 | **Odds kit** (§3) | `beaters()`, `pLeadWins()`, `pHolds()` and the two exact certainty tests, over the live-card set | ~1 µs |
-| **Bidding** (§4) | Round-size-specific rules: probability for 1 trick, a shape table for 2, per-card odds for 3–7, aces-and-runs for 8 | ~5 µs |
+| **Bidding** (§4) | Round-size-specific rules: probability for 1 trick, a shape table for 2, an expected-score bid over per-card odds for 3–7, aces-and-runs for 8 | ~5 µs |
 | **Plan + play** (§5, §6) | Intended winners / intended losers, a DUCK / TAKE / BALANCE mode, and a card choice per mode | ~10 µs |
 
 The odds kit is the piece worth building first and building well: the same `pLeadWins()` that decides
@@ -332,7 +332,10 @@ Four rules, chosen by round size. They do not interpolate into one another and a
 one-card round is a probability question, an eight-card round is a counting question, and the rounds
 in between are shape questions.
 
-### 4.1 The rounding rule (shared by §4.3–§4.5)
+### 4.1 The rounding rule (§4.3's non-leader rule and §4.5)
+
+§4.4 used this rule too until the re-calibration after Phase 3; it now chooses its bid by expected
+score instead.
 
 Three of the four rules produce a fractional point total. Resolve it by asking whether the table has
 already claimed more tricks than exist.
@@ -484,8 +487,17 @@ rawMidRound(hand):
         raw += p
     return raw
 
-bid = resolveFraction(raw, previousBidSum, R)
+dist = P(exactly t tricks), t = 0..R, treating each card's odds as an independent trial
+bid  = the b != forbiddenBet that maximises  Σ_t dist[t] · (t == b ? 5 + b : −|b − t|)
 ```
+
+**The bid is an expected-score choice, not a rounded average.** RULES §8 pays `5 + b` for a hit and
+takes `|b − t|` for a miss, so the question is not "how many tricks will this hand take on average" but
+"which bid scores best across the ways the round can go" — the same question §4.2 answers for one card,
+where it gives the 6/13 threshold. In a 3–7 trick round most hands' likeliest outcome is 0 or 1 tricks,
+and 0 is the easiest bid to hit exactly; this rule finds that from the odds. It ignores the bids already
+made — the table's count cannot change the hand's own distribution — and a barred bid falls to the next
+best. Ties go to the lower bid.
 
 A trump that no unseen trump outranks scores exactly 1. Every other card scores less, and less again
 at a bigger table: more opponents means more hands a higher card can be in, and more chances that one
@@ -507,8 +519,16 @@ priced alone, so a long trump suit — whose small trumps win once the big ones 
 than it is worth. It also still loses 3–7 trick rounds to `LowRiskStrategy`'s bidding at four to six
 players, which is partly that heuristic play rewards bidding low; §6 is where that is expected to move.
 
-`resolveFraction` clamps to `[0, R]`, but the clamp never binds: every rule in §4.3–§4.5 scores at most
-1.0 per card, so `raw ≤ R`.
+> **Why not round the average.** Until the re-calibration after Phase 3 this section summed the odds
+> to `raw` and rounded it with §4.1. The sum was right on average — bid minus tricks won within ±0.3 —
+> yet at four to six players Cyborg made its bid 35–46% of the time in these rounds against
+> LowRisk's 47–60%, because it bid 1 on three hands in four where LowRisk's low bids and ducking hit 0
+> more reliably. The expected-score bid, measured on 100 seeds per table size, moved one Cyborg
+> against LowRisk from +8.1, +6.7, +5.0, +2.2, −3.8 points a game at 2–6 players to +15.5, +12.0,
+> +11.0, +8.9, +7.0.
+
+`resolveFraction` clamps to `[0, R]`, but for §4.3's non-leader rule and §4.5 the clamp never binds:
+both score at most 1.0 per card, so `raw ≤ R`.
 
 ### 4.5 Eight-trick rounds
 
@@ -876,16 +896,20 @@ K♥   A♥ above:         hyper0(1, 26, 15) × (1 − 0.236)³ = 0.423 × 0.446
                                                           raw   = 1.214
 ```
 
-One seat is still to bid, so `USE_EXPECTED_REMAINING` charges it `5/4 = 1.25`:
+As independent trials, those odds give the hand's trick count: `P(1) = 0.790`, `P(2) = 0.205`,
+`P(3) = 0.005` — the ace makes 0 impossible. The expected score of each bid:
 
-| Bids before me | Test | Bid |
-|---|---|---|
-| 2, 2 → sum 4 | `4 + 1.214 + 1.25 > 5` → floor | **1** |
-| 0, 1 → sum 1 | `1 + 1.214 + 1.25 ≤ 5` → ceil | **2** |
+| Bid | Expected score |
+|---|---|
+| 0 | −1.214 |
+| **1** | **+4.529** |
+| 2 | +0.637 |
 
-The same five cards, two different bids. That is the rounding rule doing its whole job: with four
-tricks already claimed out of five the ace of trumps is your only reliable prize, and with one
-claimed out of five somebody has to take the rest.
+So the hand bids **1**, whatever the table has already bid. Barred from 1 as the last bidder, it bids
+**2**, not 0: the ace makes a bid of 0 a certain miss.
+
+(This example used to show §4.1's rounding bidding 1 or 2 depending on the bids already made. Measured,
+rounding the expected count was the wrong question in these rounds — see §4.4.)
 
 Under the half-point rule this hand scored 1.5, and the king of hearts alone was worth half a trick.
 Priced, it is worth under a fifth of one: an opponent holds the ace with probability 15/26, and even
@@ -979,7 +1003,7 @@ than as a side effect of Cyborg.
 | `HOLD_THRESHOLD` | 0.50 | Minimum `pHolds()` before paying for a trick with players still to act. |
 | `SLACK` | 0.75 | Distance from plan before switching to `TAKE` or `SHED`. |
 | `ENDGAME_CARDS` | 8 | Unseen-card count at which §6.5 replaces estimation with enumeration. |
-| `USE_EXPECTED_REMAINING` | on | The §4.1 refinement. Measured as a net gain, so on by default. |
+| `USE_EXPECTED_REMAINING` | on | The §4.1 refinement. Measured as a net gain, so on by default. Applies to §4.3's non-leader rule and §4.5; §4.4 no longer rounds. |
 | `LENGTH_CREDIT` | off | The §4.5 refinement. |
 
 These are development tuning, not a difficulty dial. **Cyborg ships as one strength.** It has no

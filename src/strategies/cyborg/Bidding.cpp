@@ -267,7 +267,7 @@ float rawPointsTwoTricks(const std::vector<Card>& hand, std::optional<Suit> trum
     return raw;
 }
 
-float rawPointsMidRound(const std::vector<Card>& hand, const OddsContext& odds)
+std::vector<float> cardWinOdds(const std::vector<Card>& hand, const OddsContext& odds)
 {
     const common::DeckProfile& profile = odds.profile();
     const unsigned int unseenCount = count(odds.unseen);
@@ -279,7 +279,9 @@ float rawPointsMidRound(const std::vector<Card>& hand, const OddsContext& odds)
     OddsContext sameSuitOnly = odds;
     sameSuitOnly.trumpSuit = std::nullopt;
 
-    float raw = 0.0f;
+    std::vector<float> cardOdds;
+    cardOdds.reserve(hand.size());
+
     for(const Card& card : hand)
     {
         const common::CardId c = common::cardToId(card, odds.playerCount);
@@ -304,10 +306,79 @@ float rawPointsMidRound(const std::vector<Card>& hand, const OddsContext& odds)
             }
         }
 
-        raw += p;
+        cardOdds.push_back(p);
     }
 
+    return cardOdds;
+}
+
+float rawPointsMidRound(const std::vector<Card>& hand, const OddsContext& odds)
+{
+    // Summed in hand order, exactly as before the odds were split out, so the
+    // expected trick count is bit-for-bit what it was.
+    float raw = 0.0f;
+    for(const float p : cardWinOdds(hand, odds))
+    {
+        raw += p;
+    }
     return raw;
+}
+
+std::vector<double> trickDistribution(const std::vector<float>& cardOdds, unsigned int trickCount)
+{
+    // dist[t] = P(exactly t tricks so far), one card folded in at a time: each
+    // either wins (t moves up by one) or does not.
+    std::vector<double> dist(trickCount + 1, 0.0);
+    dist[0] = 1.0;
+
+    unsigned int cards = 0;
+    for(const float odds : cardOdds)
+    {
+        const double p = odds;
+        for(int t = static_cast<int>(std::min(cards + 1, trickCount)); t >= 0; --t)
+        {
+            dist[t] = dist[t] * (1.0 - p) + (t > 0 ? dist[t - 1] * p : 0.0);
+        }
+        ++cards;
+    }
+
+    return dist;
+}
+
+unsigned int expectedScoreBid(const std::vector<double>& distribution, std::optional<unsigned int> forbidden)
+{
+    if(distribution.empty())
+        return 0u;
+
+    const auto trickCount = static_cast<unsigned int>(distribution.size() - 1);
+
+    std::optional<unsigned int> best;
+    double bestScore = 0.0;
+
+    for(unsigned int bid = 0; bid <= trickCount; ++bid)
+    {
+        if(forbidden && bid == *forbidden)
+            continue;
+
+        double expected = 0.0;
+        for(unsigned int tricks = 0; tricks <= trickCount; ++tricks)
+        {
+            const double score = (tricks == bid) ? 5.0 + bid
+                                                 : -std::fabs(static_cast<double>(bid) - static_cast<double>(tricks));
+            expected += distribution[tricks] * score;
+        }
+
+        // Strictly better by more than rounding noise, so a tie keeps the lower
+        // bid - the one a ducking hand can more easily arrange.
+        if(!best || expected > bestScore + 1e-12)
+        {
+            best = bid;
+            bestScore = expected;
+        }
+    }
+
+    // R >= 1 and only one bid is ever barred, so something is always allowed.
+    return best.value_or(0u);
 }
 
 float countTricksNoTrump(const std::vector<Card>& hand, unsigned int playerCount,
@@ -456,8 +527,12 @@ BidResult chooseBid(const BidInputs& inputs, const CyborgKnobs& knobs)
     }
     else if(R >= 3 && R <= 7)
     {
-        const float raw = rawPointsMidRound(inputs.hand, inputs.odds);
-        result.bid = resolveFraction(raw, inputs.previousBidSum, R, seatsStillToBid, N, knobs, result.rounding);
+        // §4.4: bid the trick count with the highest expected score over the
+        // distribution the per-card odds imply, rather than rounding their sum.
+        // It never lands on the barred bid, so the step-off below leaves it be.
+        const std::vector<double> distribution = trickDistribution(cardWinOdds(inputs.hand, inputs.odds), R);
+        result.bid = expectedScoreBid(distribution, inputs.forbiddenBet);
+        result.rounding = Rounding::Exact;
         result.plannedLead = std::nullopt;
     }
     else // R == 8

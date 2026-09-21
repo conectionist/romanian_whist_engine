@@ -59,12 +59,26 @@ BidResult bidTwoTricksAsLeader(const BidInputs& inputs);
 float rawPointsTwoTricks(const std::vector<Card>& hand, std::optional<Suit> trumpSuit,
                          unsigned int playerCount);
 
-// §4.4. Raw points for 3- to 7-trick rounds. Each card scores the probability
-// that nothing an opponent holds beats it: no opponent holds a higher card of its
-// suit, and - for a plain card - no opponent is void in that suit to ruff it.
-// Priced from `odds`, so it falls as the table grows. Throws
-// std::invalid_argument for a card outside the deck.
+// §4.4. Each card's chance of taking a trick in a 3- to 7-trick round: the
+// probability that nothing an opponent holds beats it - no opponent holds a
+// higher card of its suit, and, for a plain card, no opponent is void in that
+// suit to ruff it. Priced from `odds`, so it falls as the table grows. In hand
+// order. Throws std::invalid_argument for a card outside the deck.
+std::vector<float> cardWinOdds(const std::vector<Card>& hand, const OddsContext& odds);
+
+// §4.4. The sum of cardWinOdds(): the hand's expected trick count.
 float rawPointsMidRound(const std::vector<Card>& hand, const OddsContext& odds);
+
+// §4.4. P(exactly t tricks) for t = 0..trickCount, treating each card's odds as
+// an independent trial. Probability mass beyond trickCount - only possible if
+// the hand holds more cards than the round has tricks - is dropped.
+std::vector<double> trickDistribution(const std::vector<float>& cardOdds, unsigned int trickCount);
+
+// §4.4. The bid with the highest expected score over `distribution`, scored as
+// RULES §8 scores it: 5 + bid on a hit, minus the miss otherwise. §4.2's 6/13
+// threshold is this same rule for a single card. Never returns `forbidden`;
+// ties go to the lower bid.
+unsigned int expectedScoreBid(const std::vector<double>& distribution, std::optional<unsigned int> forbidden);
 
 // §4.5. Raw points for 8-trick rounds (no trump). A card that is not credited as
 // a winner scores 0.5 only when exactly one card it does not hold ranks above it.

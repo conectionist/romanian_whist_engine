@@ -161,8 +161,9 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding, pinne
 {
     // Phase 2's measurement: section 4 bidding against heuristic bidding, with
     // HEURISTIC play on both sides. The plan's gate for Phase 2 was "section 4
-    // bidding averages higher"; it does not at five and six players, and that was
-    // reported rather than tuned away.
+    // bidding averages higher". As first written it did not at five and six
+    // players, which was reported rather than tuned away; since section 4.4 bids
+    // by expected score (after Phase 3) it does at every table size.
     //
     // Moved by: a bidding change. NOT moved by card play - both arms set
     // useHeuristicPlay = true, so neither seat reaches cyborg::choosePlay. If a
@@ -173,17 +174,17 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding, pinne
     // (A = section 4 bidding, B = heuristic bidding):
     //
     //     players     A        B      A - B
-    //        2      24.6     20.7     +3.9
-    //        3      52.8     47.1     +5.7
-    //        4      67.9     67.6     +0.3
-    //        5      82.9     86.2     -3.3
-    //        6      99.6    104.0     -4.5
+    //        2      29.9     19.4    +10.5
+    //        3      54.9     46.2     +8.8
+    //        4      73.0     67.2     +5.9
+    //        5      90.9     85.3     +5.6
+    //        6     108.0    102.9     +5.1
     constexpr std::array<Expected, 5> expected{{
-        {2, 3942, 3316},
-        {3, 12666, 11292},
-        {4, 21730, 21620},
-        {5, 33158, 34465},
-        {6, 47792, 49933},
+        {2, 4790, 3106},
+        {3, 13184, 11080},
+        {4, 23366, 21491},
+        {5, 36376, 34137},
+        {6, 51816, 49386},
     }};
 
     checkPins(knobsFor(false, true), knobsFor(true, true), expected);
@@ -200,8 +201,8 @@ TEST_CASE("Cyborg tournament: section 6 play against heuristic play, pinned per 
     // the SHED and BALANCE leads chose by the duck term. Phase 3c made the
     // no-trump BALANCE lead cash its certainties and judged SHED on certainties
     // without trumps. These numbers measure that, and they are why section 6 play
-    // is the default. The one remaining loss, at five players, did not reproduce
-    // on two other seed ranges (+1.5 and -0.8). See
+    // is the default. Re-pinned after section 4.4's expected-score bid, which both
+    // arms use; the small five-player loss is still there. See
     // docs/cyborg-implementation-plan.md.
     //
     // Moved by: card play. Also by bidding, since both arms bid by section 4.
@@ -209,17 +210,17 @@ TEST_CASE("Cyborg tournament: section 6 play against heuristic play, pinned per 
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      31.3     24.6     +6.7
-    //        3      51.9     50.3     +1.6
-    //        4      71.5     68.3     +3.1
-    //        5      81.2     82.9     -1.7
-    //        6     101.2    100.7     +0.4
+    //        2      32.6     21.6    +11.0
+    //        3      56.2     51.8     +4.3
+    //        4      76.1     72.7     +3.4
+    //        5      89.6     90.4     -0.8
+    //        6     108.9    108.8     +0.1
     constexpr std::array<Expected, 5> expected{{
-        {2, 5002, 3938},
-        {3, 12451, 12068},
-        {4, 22865, 21862},
-        {5, 32475, 33153},
-        {6, 48554, 48347},
+        {2, 5220, 3458},
+        {3, 13487, 12443},
+        {4, 24348, 23256},
+        {5, 35834, 36170},
+        {6, 52283, 52219},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(false, true), expected);
@@ -232,26 +233,28 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding under 
     // sides - the question Phase 2 could not answer, because heuristic play
     // rewards bidding low. A = section 4 bidding, B = heuristic bidding.
     //
-    // This is the input to the bidding re-calibration decision, which is taken
-    // separately from card play. At five and six players heuristic bidding still
-    // wins.
+    // This was the input to the bidding re-calibration after Phase 3: section 4
+    // lost at five and six players (-1.2, -3.5), all of it in 3-7 trick rounds,
+    // where it bid a hand's average and hit less often than the heuristic's low
+    // bids. Section 4.4 now bids the count with the highest expected score, and
+    // wins at every table size.
     //
     // Moved by: bidding, and by card play.
     //
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      29.8     14.4    +15.4
-    //        3      54.6     46.0     +8.6
-    //        4      72.3     68.3     +3.9
-    //        5      82.3     83.5     -1.2
-    //        6      99.4    102.8     -3.5
+    //        2      31.0     13.8    +17.2
+    //        3      56.0     45.1    +10.9
+    //        4      75.5     67.9     +7.6
+    //        5      90.5     83.4     +7.1
+    //        6     108.6    103.1     +5.5
     constexpr std::array<Expected, 5> expected{{
-        {2, 4772, 2300},
-        {3, 13107, 11049},
-        {4, 23127, 21867},
-        {5, 32911, 33391},
-        {6, 47696, 49362},
+        {2, 4964, 2210},
+        {3, 13445, 10823},
+        {4, 24176, 21740},
+        {5, 36202, 33346},
+        {6, 52107, 49490},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(true, false), expected);
