@@ -195,11 +195,13 @@ TEST_CASE("Cyborg tournament: section 6 play against heuristic play, pinned per 
     // What Phase 3's card play is worth. Both arms bid by section 4, so the play
     // is the only difference: A = section 6 play, B = heuristic play.
     //
-    // It LOSES at three to six players, and that is why useHeuristicPlay still
-    // defaults to true. Measured in Phase 3b, the loss is almost all in no-trump
-    // rounds, where every card is dealt: pLeadWins is then 0 for any card with a
-    // higher card still out, apart from the duck term, and the SHED and BALANCE
-    // leads end up choosing by that term. Phase 3c redesigns those two leads; see
+    // History: as first landed (Phase 3b) section 6 play lost at three to six
+    // players, almost all of it in no-trump rounds, where every card is dealt and
+    // the SHED and BALANCE leads chose by the duck term. Phase 3c made the
+    // no-trump BALANCE lead cash its certainties and judged SHED on certainties
+    // without trumps. These numbers measure that, and they are why section 6 play
+    // is the default. The one remaining loss, at five players, did not reproduce
+    // on two other seed ranges (+1.5 and -0.8). See
     // docs/cyborg-implementation-plan.md.
     //
     // Moved by: card play. Also by bidding, since both arms bid by section 4.
@@ -207,17 +209,17 @@ TEST_CASE("Cyborg tournament: section 6 play against heuristic play, pinned per 
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      27.9     26.6     +1.3
-    //        3      46.8     51.4     -4.7
-    //        4      65.3     66.6     -1.3
-    //        5      75.5     81.5     -5.9
-    //        6      95.4    100.4     -5.0
+    //        2      31.3     24.6     +6.7
+    //        3      51.9     50.3     +1.6
+    //        4      71.5     68.3     +3.1
+    //        5      81.2     82.9     -1.7
+    //        6     101.2    100.7     +0.4
     constexpr std::array<Expected, 5> expected{{
-        {2, 4468, 4256},
-        {3, 11220, 12339},
-        {4, 20900, 21318},
-        {5, 30217, 32585},
-        {6, 45812, 48191},
+        {2, 5002, 3938},
+        {3, 12451, 12068},
+        {4, 22865, 21862},
+        {5, 32475, 33153},
+        {6, 48554, 48347},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(false, true), expected);
@@ -230,26 +232,26 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding under 
     // sides - the question Phase 2 could not answer, because heuristic play
     // rewards bidding low. A = section 4 bidding, B = heuristic bidding.
     //
-    // Read it next to the play A/B above: section 6 play still under-takes in
-    // no-trump rounds, so these are measured against play known to be weak
-    // there, and the bidding re-calibration decision waits for Phase 3c.
+    // This is the input to the bidding re-calibration decision, which is taken
+    // separately from card play. At five and six players heuristic bidding still
+    // wins.
     //
     // Moved by: bidding, and by card play.
     //
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      27.1     12.2    +15.0
-    //        3      51.6     43.5     +8.1
-    //        4      68.5     66.9     +1.5
-    //        5      78.9     82.6     -3.7
-    //        6      95.3    101.4     -6.1
+    //        2      29.8     14.4    +15.4
+    //        3      54.6     46.0     +8.6
+    //        4      72.3     68.3     +3.9
+    //        5      82.3     83.5     -1.2
+    //        6      99.4    102.8     -3.5
     constexpr std::array<Expected, 5> expected{{
-        {2, 4340, 1948},
-        {3, 12383, 10443},
-        {4, 21906, 21415},
-        {5, 31568, 33030},
-        {6, 45743, 48682},
+        {2, 4772, 2300},
+        {3, 13107, 11049},
+        {4, 23127, 21867},
+        {5, 32911, 33391},
+        {6, 47696, 49362},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(true, false), expected);

@@ -26,10 +26,10 @@ using namespace romanian_whist::test;
 //       as they were; and
 //   (b) that the heuristic answers reproduce LowRiskStrategy exactly.
 //
-// (b) will, from the phase that adds real card play, be testing the FALLBACK
-// rather than the shipping path - the answer both decisions give when the memory
-// disagrees with the position. That is still worth pinning. (a) never decays at
-// all. Do not delete this on the grounds that Cyborg has moved on.
+// Since Phase 3c made section 4 bidding and section 6 play the defaults, (b) pins
+// the FALLBACK rather than the shipping path - the answer both decisions give
+// when the memory disagrees with the position. That is still worth pinning. (a)
+// never decays at all. Do not delete this on the grounds that Cyborg has moved on.
 //
 // The comparison is exact rather than statistical because neither strategy
 // consumes randomness and neither touches the engine's generator: the deal

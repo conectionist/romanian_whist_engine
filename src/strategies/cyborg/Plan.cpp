@@ -49,6 +49,24 @@ std::vector<ScoredCard> scoreHand(common::Mask hand, const OddsContext& odds,
 
     return scored;
 }
+
+// How many cards of `hand` nothing live can beat (§3.2).
+unsigned int countSureWinners(common::Mask hand, const OddsContext& odds)
+{
+    unsigned int sure = 0;
+
+    common::Mask rest = hand;
+    while(rest != 0)
+    {
+        const auto id = static_cast<common::CardId>(std::countr_zero(rest));
+        rest &= rest - 1ULL;
+
+        if(isSureWinner(id, odds))
+            ++sure;
+    }
+
+    return sure;
+}
 } // namespace
 
 Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
@@ -89,6 +107,18 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
     // of trusting `mode`.
     const float surplus = total - static_cast<float>(plan.need);
 
+    // WITHOUT TRUMPS, JUDGE THAT SURPLUS ON CERTAINTIES. Every card is dealt then,
+    // so for any card with a higher card still out pLeadWins is nothing but the
+    // duck term - the chance its beater's holder ducks under it. Summed over a
+    // hand, that made ordinary hands look over-strong: SHED was the commonest
+    // opening mode in no-trump rounds, and those rounds still ended SHORT of the
+    // bid (measured in Phase 3b). Counting only the cards nothing can beat asks
+    // the question SHED needs answered. It is also exactly the duck-free sum,
+    // since without trumps a card is either certain or scores zero without it.
+    const float shedSurplus =
+        odds.trumpSuit ? surplus
+                       : static_cast<float>(countSureWinners(hand, odds)) - static_cast<float>(plan.need);
+
     if(plan.need == 0)
     {
         plan.mode = Mode::Duck;
@@ -99,7 +129,7 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
         // promised. Both mean: take what can be taken.
         plan.mode = Mode::Take;
     }
-    else if(surplus > knobs.slack)
+    else if(shedSurplus > knobs.slack)
     {
         plan.mode = Mode::Shed;
     }

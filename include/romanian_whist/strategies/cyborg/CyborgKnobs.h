@@ -49,8 +49,12 @@ struct CyborgKnobs
     // whenever the round memory disagrees with the position it was handed, both
     // decisions fall back to them rather than to something arbitrary. What these
     // flags change is only who is asked FIRST.
+    //
+    // Section 6 play took first refusal in Phase 3c, once the no-trump BALANCE
+    // and SHED fixes brought it level with or ahead of heuristic play - see the
+    // pinned A/Bs in tests/CyborgTournamentTests.cpp.
     bool useHeuristicBid = false;
-    bool useHeuristicPlay = true;
+    bool useHeuristicPlay = false;
 
     // The configuration under which CyborgStrategy is required to play a game
     // element-wise identically to LowRiskStrategy.

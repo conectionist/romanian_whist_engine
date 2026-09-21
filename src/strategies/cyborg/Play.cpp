@@ -261,6 +261,22 @@ std::optional<Card> leadPlanned(const PlaySituation& situation)
     return (found != situation.legal.end()) ? std::optional<Card>(*found) : std::nullopt;
 }
 
+// §6.1's TAKE lead: keep cashing the suit already being cashed, else cash a
+// certainty from the longest suit, else lead low from the longest suit. BALANCE
+// borrows it whole when there is no trump - see that arm for why.
+std::optional<Card> leadToTake(const PlaySituation& situation, const OddsContext& odds)
+{
+    const SuitLengths lengths = suitLengths(situation.hand);
+
+    if(const std::optional<Card> cashed = continueCashing(situation, odds))
+        return cashed;
+
+    if(const std::optional<Card> cashed = cashLongestSuit(situation, odds, lengths))
+        return cashed;
+
+    return leadLowestOfLongestSuit(situation, lengths);
+}
+
 std::optional<Card> chooseLead(const PlaySituation& situation, const Plan& plan,
                                const OddsContext& odds, const CyborgKnobs& /*knobs*/,
                                const ScoreCache& scores)
@@ -273,18 +289,7 @@ std::optional<Card> chooseLead(const PlaySituation& situation, const Plan& plan,
     switch(plan.mode)
     {
     case Mode::Take:
-    {
-        // §6.1's three rules, in the order §6.1 states them.
-        const SuitLengths lengths = suitLengths(situation.hand);
-
-        if(const std::optional<Card> cashed = continueCashing(situation, odds))
-            return cashed;
-
-        if(const std::optional<Card> cashed = cashLongestSuit(situation, odds, lengths))
-            return cashed;
-
-        return leadLowestOfLongestSuit(situation, lengths);
-    }
+        return leadToTake(situation, odds);
 
     case Mode::Shed:
     {
@@ -308,6 +313,19 @@ std::optional<Card> chooseLead(const PlaySituation& situation, const Plan& plan,
 
     case Mode::Balance:
     {
+        // WITHOUT TRUMPS, CASH. Nothing can ruff, so a sure winner is lost only by
+        // losing the lead or being forced to discard it - and leading a loser to
+        // "keep" the winners gives up exactly that. So a no-trump BALANCE lead
+        // runs TAKE's cashing rules.
+        //
+        // The trump-round rules below measured badly here (Phase 3c). With every
+        // card dealt, pLeadWins is 0 for any card with a higher card still out,
+        // apart from the duck term, so "the dearest winner" meant the card an
+        // opponent was likeliest to duck under, and coasting on losers handed
+        // away the tempo the certainties needed.
+        if(!situation.trump)
+            return leadToTake(situation, odds);
+
         std::vector<Card> winners;
         std::vector<Card> losers;
         splitByPlan(situation, plan, playerCount, winners, losers);

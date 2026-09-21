@@ -405,54 +405,56 @@ TEST_CASE("Cyborg play: feasibility measures the distance from taking exactly n"
     REQUIRE(feasibility(junkMask, 1, ctx) == 0.0f);
 }
 
-TEST_CASE("Cyborg play: the BALANCE lead cashes or coasts on whether its winners are certain",
+TEST_CASE("Cyborg play: with trumps the BALANCE lead cashes or coasts on whether its winners are certain",
           "[cyborg]")
 {
-    // §6.1's BALANCE lead, which nothing else covers. Every plan here comes out
-    // of buildPlan rather than being assembled by hand, because the arm's three
-    // branches turn on `expected` - a field a hand-built Plan leaves at zero.
+    // §6.1's BALANCE lead in a trump round. Every plan here comes out of
+    // buildPlan rather than being assembled by hand, because the arm's branches
+    // turn on `expected` - a field a hand-built Plan leaves at zero. The no-trump
+    // lead is a different rule, pinned in the next test case.
     const CyborgKnobs knobs{};
 
     const Card AceSpades{Rank::Ace, Suit::Spades};
     const Card QueenSpades{Rank::Queen, Suit::Spades};
     const Card EightHearts{Rank::Eight, Suit::Hearts};
+    const Card spadesTurnUp{Rank::Eight, Suit::Spades};
 
     SECTION("certain winners, so lead the safest loser and keep them")
     {
-        // The ace cannot be beaten, so the one trick owed is already paid for.
-        // Leading it now would spend a certainty on a trick the plan does not
-        // need yet.
+        // The ace of trumps cannot be beaten, so the one trick owed is already
+        // paid for. Leading it now would spend a certainty on a trick the plan
+        // does not need yet.
         const std::vector<Card> hand{AceSpades, SevenHearts, EightHearts};
 
         const OddsContext ctx = makeContext(4,
                                             {Card{Rank::Nine, Suit::Hearts}, TenHearts, Card{Rank::Jack, Suit::Hearts},
                                              QueenHearts, KingHearts, Card{Rank::Seven, Suit::Spades}},
-                                            std::nullopt, 6, 3);
+                                            Suit::Spades, 6, 3);
 
         const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
         REQUIRE(plan.mode == Mode::Balance);
         REQUIRE(plan.expected == 1.0f); // the ace, and nothing less than certain
 
-        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == SevenHearts);
+        REQUIRE(choosePlay(leading(hand, spadesTurnUp), plan, ctx, knobs) == SevenHearts);
     }
 
     SECTION("a winner that is merely likely gets cashed while it is still worth something")
     {
-        // The queen is the plan's winner but the king may yet beat it, so the bid
-        // is not paid for. Lead it now rather than watch it shrink.
+        // The queen of trumps is the plan's winner but the king may yet beat it,
+        // so the bid is not paid for. Lead it now rather than watch it shrink.
         const std::vector<Card> hand{QueenSpades, SevenHearts, EightHearts};
 
         const OddsContext ctx = makeContext(4,
                                             {Card{Rank::King, Suit::Spades}, Card{Rank::Seven, Suit::Spades},
                                              Card{Rank::Nine, Suit::Hearts}, TenHearts,
                                              Card{Rank::Jack, Suit::Hearts}, QueenHearts},
-                                            std::nullopt, 3, 3);
+                                            Suit::Spades, 3, 3);
 
         const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
         REQUIRE(plan.mode == Mode::Balance);
         REQUIRE(plan.expected < 1.0f); // likely, not certain
 
-        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == QueenSpades);
+        REQUIRE(choosePlay(leading(hand, spadesTurnUp), plan, ctx, knobs) == QueenSpades);
     }
 
     SECTION("a plain winner is cashed ahead of a trump one while trumps are live")
@@ -482,6 +484,128 @@ TEST_CASE("Cyborg play: the BALANCE lead cashes or coasts on whether its winners
         REQUIRE(choosePlay(leading(hand, Card{Rank::Seven, Suit::Hearts}), plan, ctx, knobs) ==
                 KingSpades);
     }
+}
+
+TEST_CASE("Cyborg play: without trumps the BALANCE lead cashes its certainties", "[cyborg]")
+{
+    // Without trumps nothing can ruff, so a sure winner is lost only by losing the
+    // lead or being forced to discard it - and leading a loser to "keep" the
+    // winners gives up exactly that. So a no-trump BALANCE lead runs TAKE's
+    // cashing rules. The trump-round rules in the test case above measured badly
+    // here (Phase 3c).
+    //
+    // Every card is dealt in a no-trump round, so these fixtures keep the unseen
+    // cards and the opponents' hands to the same count.
+    const CyborgKnobs knobs{};
+
+    const Card AceSpades{Rank::Ace, Suit::Spades};
+    const Card KingSpades{Rank::King, Suit::Spades};
+    const Card QueenSpades{Rank::Queen, Suit::Spades};
+    const Card AceHearts{Rank::Ace, Suit::Hearts};
+    const Card EightHearts{Rank::Eight, Suit::Hearts};
+
+    SECTION("a certain winner is cashed rather than kept")
+    {
+        // With trumps this is the hand that coasts on the seven. Without them the
+        // ace goes now, while this seat still has the lead to cash it with.
+        const std::vector<Card> hand{AceSpades, SevenHearts, EightHearts};
+
+        const OddsContext ctx = makeContext(4,
+                                            {Card{Rank::Nine, Suit::Hearts}, TenHearts, Card{Rank::Jack, Suit::Hearts},
+                                             QueenHearts, KingHearts, Card{Rank::Seven, Suit::Spades},
+                                             Card{Rank::Eight, Suit::Spades}, Card{Rank::Nine, Suit::Spades},
+                                             Card{Rank::Ten, Suit::Spades}},
+                                            std::nullopt, 9, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+        REQUIRE(plan.expected == 1.0f);
+
+        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == AceSpades);
+    }
+
+    SECTION("with no certainty it leads low from its longest suit")
+    {
+        // The queen is the plan's winner but only by the duck term: the king is
+        // certainly in somebody's hand. Leading it would feed the king, so lead
+        // the cheapest card of the longest suit and keep the queen for later.
+        const std::vector<Card> hand{QueenSpades, SevenHearts, EightHearts};
+
+        const OddsContext ctx = makeContext(4,
+                                            {KingSpades, Card{Rank::Seven, Suit::Spades}, Card{Rank::Eight, Suit::Spades},
+                                             Card{Rank::Nine, Suit::Hearts}, TenHearts, Card{Rank::Jack, Suit::Hearts},
+                                             QueenHearts, KingHearts, AceHearts},
+                                            std::nullopt, 9, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+        REQUIRE(plan.expected < 1.0f);
+
+        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == SevenHearts);
+    }
+
+    SECTION("a suit already being cashed keeps the lead")
+    {
+        // Two certainties, one per suit, equally long. By length and rank the ace
+        // of hearts would go first; the hint says spades are part-way through,
+        // so the king of spades does.
+        const std::vector<Card> hand{KingSpades, AceHearts, Card{Rank::Seven, Suit::Clubs}};
+
+        const OddsContext ctx = makeContext(4,
+                                            {QueenSpades, Card{Rank::Jack, Suit::Spades}, KingHearts, QueenHearts,
+                                             Card{Rank::Eight, Suit::Clubs}, Card{Rank::Nine, Suit::Clubs}},
+                                            std::nullopt, 6, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 2, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+
+        PlaySituation situation = leading(hand, std::nullopt);
+        REQUIRE(choosePlay(situation, plan, ctx, knobs) == AceHearts);
+
+        situation.cashingSuit = Suit::Spades;
+        REQUIRE(choosePlay(situation, plan, ctx, knobs) == KingSpades);
+    }
+}
+
+TEST_CASE("Cyborg play: without trumps SHED is judged on certainties", "[cyborg]")
+{
+    // With every card dealt, a card with a higher card still out scores only the
+    // duck term - the chance its beater's holder ducks under it. Summed over a
+    // hand, that made ordinary hands look over-strong and sent no-trump rounds
+    // into SHED that then ended short of the bid.
+    //
+    // Four players, no trump: this hand holds the king and queen of every suit
+    // with every ace out. Nothing here is certain, but every card carries a real
+    // duck term, because each suit's five low cards are out too. (A hand with a
+    // genuine surplus of certainties still sheds - see the mode test above.)
+    const CyborgKnobs knobs{};
+
+    std::vector<Card> hand;
+    std::vector<Card> unseen;
+    for(const Suit suit : {Suit::Hearts, Suit::Diamonds, Suit::Spades, Suit::Clubs})
+    {
+        hand.push_back(Card{Rank::King, suit});
+        hand.push_back(Card{Rank::Queen, suit});
+
+        for(const Rank rank : {Rank::Ace, Rank::Jack, Rank::Ten, Rank::Nine, Rank::Eight, Rank::Seven})
+        {
+            unseen.push_back(Card{rank, suit});
+        }
+    }
+
+    const OddsContext ctx = makeContext(4, unseen, std::nullopt, 24, 8);
+
+    // The premise: counted with the duck term, the hand looks well over a bid of one.
+    float withDuckTerm = 0.0f;
+    for(const Card& card : hand)
+    {
+        withDuckTerm += pLeadWins(common::cardToId(card, 4), ctx);
+    }
+    REQUIRE(withDuckTerm - 1.0f > knobs.slack);
+
+    // Judged on certainties - it holds none - it is not over its bid at all.
+    const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
+    REQUIRE(plan.mode == Mode::Balance);
 }
 
 TEST_CASE("Cyborg play: section 6.3 compares the two hands the decision leaves behind", "[cyborg]")
