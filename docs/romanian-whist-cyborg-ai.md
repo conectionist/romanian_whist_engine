@@ -682,27 +682,43 @@ better informed.
 ```
 lead():
     if mode == TAKE:
-        if any sure winner exists (§3.2):
+        if the suit I am already cashing still holds a sure winner (§3.2):
+            cash that suit's highest sure winner        // even if it is now the SHORTER suit
+        elif any sure winner exists:
             cash from the suit where I hold the most cards, highest card first
         else:
-            lead argmax pLeadWins
+            lead the LOWEST card of my longest suit     // never a big card into an unknown table
     if mode == SHED:
         lead the highest-liability card among those that are NOT sure winners
         // a sure winner cannot be shed by leading it; save it for a trick someone else opens
+        if every legal card is a sure winner: lead the CHEAPEST of them
     if mode == DUCK:
         lead argmin pLeadWins
-        tie-break: among cards of near-equal (low) win chance, lead the HIGHEST rank
+        tie-break: among cards of near-equal (low) win chance, lead the DEAREST
+                   (isMoreDangerous: any trump above any plain card, rank within that)
     if mode == BALANCE:
         if my winners are non-trump and trumps are still live:
             cash the best winner now — it is only getting more ruffable
-        elif ahead of plan: lead the safest loser
-        else:               lead argmax pLeadWins among `winners`
+        elif every winner is a certainty: lead the safest loser   // the bid is already paid for
+        else:                             lead argmax pLeadWins among `winners`
 ```
+
+The three paragraphs below are the *reasoning* behind the branches above, not corrections to them —
+each one was found while implementing, and the block has been rewritten to match. Phases 0, 1 and 2
+each found real errors in this document; these were §6.1's.
 
 **The DUCK tie-break is not a detail.** Holding `Q♥` and `7♥` with the king the only heart left
 alive, both are safe to lead — the king's holder must follow suit and must therefore beat you. Lead
 the **queen**. The seven will still be safe next trick; the queen might not be, and it is the card
 you will struggle to lose later. Throw the expensive safe card, keep the cheap one.
+
+**Correction, found in review: "expensive" is not rank.** The example above is single-suit, so rank
+and liability agree and it never settles the *cross-suit* case. §6's ordering does, and it is the one
+that holds: **any trump is dearer than any plain card, whatever the ranks**. Once the big trumps are
+gone, a small trump and a plain card both score zero on `pLeadWins`, and a bare-rank tie-break throws
+the plain card and keeps the trump — the one card that will later be *forced* to ruff and take the
+very trick `DUCK` is trying not to win. Measured across random trump-round positions, bare rank
+disagreed with this on 9% of `DUCK` leads.
 
 **Cashing from the longest suit** in `TAKE` mode is what makes the eight-card bid honest. §4.5
 credited your `J♥` on the assumption that leading `A♥` and `K♥` first would flush the queen. If play
@@ -712,18 +728,32 @@ jack, in that suit, before starting another.
 **Correction, found implementing this.** "The suit where I hold the most cards" cannot produce that
 sequence by itself: once `A♥` is gone hearts is the *shorter* suit, and the rule switches to diamonds
 before the jack is cashed — §7.3's own example contradicts the line above it. So the rule carries one
-piece of state: **keep cashing the suit you last led while it still holds a certainty**, and choose by
-length only when it does not. That is `PlaySituation::cashingSuit`, set from the card this seat led,
-and it is the only thing card play remembers from one trick to the next.
+piece of state: **keep cashing the suit you are part-way through while it still holds a certainty**,
+and choose by length only when it does not. That is `PlaySituation::cashingSuit`, and it is the only
+thing card play remembers from one trick to the next.
 
-**Where the pseudocode and the prose disagree, the prose wins.** `TAKE` with no sure winner leads the
-lowest card of the longest suit, not `argmax pLeadWins`: leading the best card you hold into an
-unknown table is exactly what the "no aces" paragraph below says not to do.
+Set it from a lead that was itself a **cash** — a `TAKE`-mode lead of a sure winner — and clear it on
+any other lead. Recording *every* lead, as a first cut did, means a `DUCK` or `BALANCE` discard leaves
+a hint behind, and the next `TAKE` lead then cashes that junk suit instead of starting the run this
+rule exists to protect: §7.3 inverted.
+
+**`TAKE` with no sure winner leads low, not high.** Leading the best card you hold into an unknown
+table is exactly what the "no aces" paragraph below says not to do, so the branch above reads "the
+lowest card of my longest suit" where an earlier draft said `argmax pLeadWins`.
 
 Two edges the pseudocode leaves open, settled in the implementation: when every legal card is a sure
 winner, `SHED` has nothing to shed and spends the cheapest of them instead of the dearest; and
-`BALANCE` counts itself ahead of plan when the winners it holds already cover what is owed
-(`expected >= need`), which is when it leads a loser rather than cashing.
+`BALANCE` counts itself ahead of plan when **every winner it is counting on is a certainty**, which is
+when it leads a loser rather than cashing.
+
+**That test is an equality, not an inequality.** `expected` is the sum of the `need` best `pLeadWins`
+scores and `pLeadWins` is capped at 1, so `expected` can never *exceed* `need`: written `expected >=
+need` it reads like a margin, but the only way to satisfy it is for every one of those cards to have
+returned exactly `1.0` from one of §3.2's certainty early-outs. A hand holding one certainty and one
+near-certainty is *not* ahead of plan and cashes instead. The code says this with a named
+`winnersAreCertain()` rather than leaving the reader to work out that the inequality is unreachable.
+Whether a slack-based threshold (`expected >= need - slack`, mirroring the behind-plan test in §5)
+plays better is a Phase 4 measurement, not an assumption to bake in here.
 
 **No aces, and needing tricks.** Do not lead a big card into an unknown table — whoever holds the
 card above it simply takes it, and you have spent your best card for nothing. Lead your *lowest*

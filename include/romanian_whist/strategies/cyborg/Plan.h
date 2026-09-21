@@ -26,17 +26,24 @@ enum class Mode
 
 struct Plan
 {
-    common::Mask winners = 0; // the `need` best cards, by pLeadWins. Empty when need == 0.
-    common::Mask losers = 0;  // everything else in the hand
+    // The `need` best cards, by pLeadWins. Empty when need == 0.
+    //
+    // The losers are the rest of the hand, and are NOT stored: a second mask
+    // would be an invariant (winners | losers == hand) that nothing enforces and
+    // that a hand-built Plan can quietly break. Whoever needs the losers has the
+    // hand in front of them and can say `& ~winners`.
+    common::Mask winners = 0;
 
     unsigned int need = 0; // bet - tricksWon, clamped at 0
     Mode mode = Mode::Duck;
 
-    // What the plan expects the winners to deliver, and how far the WHOLE hand
-    // is above the bid. `surplus` is what SHED reacts to: a hand that bid 1 and
-    // holds two aces is one trick from a miss.
+    // What the plan expects its winners to deliver. §6.1 reads this to tell
+    // whether the bid is already paid for.
+    //
+    // It can never EXCEED `need` - it is a sum of `need` probabilities - so
+    // `expected >= need` is an equality test for "every winner is a certainty",
+    // which is how Play.cpp names it.
     float expected = 0.0f;
-    float surplus = 0.0f;
 };
 
 // §5. Rebuild this at EVERY decision rather than once per round: cards leave the
@@ -45,8 +52,12 @@ struct Plan
 //
 // Throws std::invalid_argument through the odds kit for a card id outside the
 // deck, which the strategy turns into its heuristic fallback.
+// `scores` is an optional per-decision ScoreCache, shared with choosePlay so that
+// a card is scored once rather than once per rule that asks. Omit it and this
+// builds its own.
 Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
-               const OddsContext& odds, const CyborgKnobs& knobs);
+               const OddsContext& odds, const CyborgKnobs& knobs,
+               const ScoreCache* scores = nullptr);
 
 // §6.3. How far a hand is from taking exactly `n` tricks: the sum of its `n`
 // best pLeadWins scores, minus `n`, as a distance. Zero is a hand whose best n
@@ -54,7 +65,8 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
 //
 // BALANCE compares two of these - the hand after taking this trick against the
 // hand after ducking it - and prefers the smaller.
-float feasibility(common::Mask hand, unsigned int n, const OddsContext& odds);
+float feasibility(common::Mask hand, unsigned int n, const OddsContext& odds,
+                  const ScoreCache* scores = nullptr);
 
 } // namespace romanian_whist::cyborg
 

@@ -23,7 +23,8 @@ struct ScoredCard
 // settle ties (see tests/TrickHeuristicsTests.cpp); a plan is rebuilt from a
 // MASK, which has no input order to lean on, so the tie rule has to be in the
 // comparator or the plan would depend on nothing at all.
-std::vector<ScoredCard> scoreHand(common::Mask hand, const OddsContext& odds)
+std::vector<ScoredCard> scoreHand(common::Mask hand, const OddsContext& odds,
+                                  const ScoreCache& scores)
 {
     std::vector<ScoredCard> scored;
     scored.reserve(static_cast<std::size_t>(common::popcount(hand)));
@@ -34,9 +35,10 @@ std::vector<ScoredCard> scoreHand(common::Mask hand, const OddsContext& odds)
         const auto id = static_cast<common::CardId>(std::countr_zero(rest));
         rest &= rest - 1ULL;
 
-        // pLeadWins() validates the id through beaters(), which is the only
+        // ScoreCache::of() falls through to pLeadWins() for a card it does not
+        // hold, and pLeadWins() validates the id through beaters() - the only
         // CardId bounds check in the odds kit.
-        scored.push_back(ScoredCard{id, pLeadWins(id, odds)});
+        scored.push_back(ScoredCard{id, scores.of(id, odds)});
     }
 
     std::sort(scored.begin(), scored.end(), [](const ScoredCard& a, const ScoredCard& b) {
@@ -50,15 +52,22 @@ std::vector<ScoredCard> scoreHand(common::Mask hand, const OddsContext& odds)
 } // namespace
 
 Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
-               const OddsContext& odds, const CyborgKnobs& knobs)
+               const OddsContext& odds, const CyborgKnobs& knobs, const ScoreCache* scores)
 {
+    ScoreCache owned;
+    if(scores == nullptr)
+    {
+        owned = makeScoreCache(hand, odds);
+        scores = &owned;
+    }
+
     Plan plan;
 
     // Clamped rather than signed: a hand that has already overshot its bid owes
     // nothing more, and the overshoot is water under the bridge.
     plan.need = (bet > tricksWon) ? bet - tricksWon : 0u;
 
-    const std::vector<ScoredCard> scored = scoreHand(hand, odds);
+    const std::vector<ScoredCard> scored = scoreHand(hand, odds, *scores);
     const auto rem = static_cast<unsigned int>(scored.size());
 
     float total = 0.0f;
@@ -71,13 +80,14 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
             plan.winners |= common::cardBit(scored[i].id);
             plan.expected += scored[i].score;
         }
-        else
-        {
-            plan.losers |= common::cardBit(scored[i].id);
-        }
     }
 
-    plan.surplus = total - static_cast<float>(plan.need);
+    // How far the WHOLE hand is above the bid, and what SHED reacts to: a hand
+    // that bid 1 and holds two aces is one trick from a miss. A local rather than
+    // a field on Plan - the mode below is the only thing that reads it, and
+    // publishing it would invite a caller to re-derive the mode decision instead
+    // of trusting `mode`.
+    const float surplus = total - static_cast<float>(plan.need);
 
     if(plan.need == 0)
     {
@@ -89,7 +99,7 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
         // promised. Both mean: take what can be taken.
         plan.mode = Mode::Take;
     }
-    else if(plan.surplus > knobs.slack)
+    else if(surplus > knobs.slack)
     {
         plan.mode = Mode::Shed;
     }
@@ -101,9 +111,17 @@ Plan buildPlan(common::Mask hand, unsigned int bet, unsigned int tricksWon,
     return plan;
 }
 
-float feasibility(common::Mask hand, unsigned int n, const OddsContext& odds)
+float feasibility(common::Mask hand, unsigned int n, const OddsContext& odds,
+                  const ScoreCache* scores)
 {
-    const std::vector<ScoredCard> scored = scoreHand(hand, odds);
+    ScoreCache owned;
+    if(scores == nullptr)
+    {
+        owned = makeScoreCache(hand, odds);
+        scores = &owned;
+    }
+
+    const std::vector<ScoredCard> scored = scoreHand(hand, odds, *scores);
 
     float sum = 0.0f;
     for(std::size_t i = 0; i < scored.size() && i < n; ++i)

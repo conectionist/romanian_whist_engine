@@ -38,7 +38,11 @@ struct PlaySituation
     // at the memory.
     std::optional<Suit> cashingSuit;
 
-    unsigned int playerCount = 4;
+    // NOTE there is no playerCount here. PlayContext does not carry one, so a
+    // field here could only be filled from the memory - which is exactly what the
+    // note at the top says this struct does not do. The seat count reaches the
+    // rules through OddsContext::playerCount, the same place every card id comes
+    // from, so the two can never disagree about which deck is in play.
 };
 
 // §6.1-§6.4. The card to play, or empty if `legal` is empty.
@@ -47,8 +51,13 @@ struct PlaySituation
 // by construction. The strategy still checks it against the list afterwards -
 // belt and braces, and the check is what makes a bug here cost a fallback
 // rather than a refused move.
+//
+// `scores` is an optional per-decision ScoreCache. Pass the one buildPlan was
+// given and no card is scored twice in a decision; pass nothing and this builds
+// its own over the hand, which is still cheaper than letting each rule rescore.
 std::optional<Card> choosePlay(const PlaySituation& situation, const Plan& plan,
-                               const OddsContext& odds, const CyborgKnobs& knobs);
+                               const OddsContext& odds, const CyborgKnobs& knobs,
+                               const ScoreCache* scores = nullptr);
 
 } // namespace romanian_whist::cyborg
 

@@ -51,20 +51,20 @@ OddsContext makeContext(unsigned int playerCount, const std::vector<Card>& unsee
     return ctx;
 }
 
-PlaySituation leading(const std::vector<Card>& hand, std::optional<Card> trump,
-                      unsigned int playerCount = 4)
+// The seat count is not part of a PlaySituation - it arrives with the
+// OddsContext, from makeContext() above - so neither of these takes one.
+PlaySituation leading(const std::vector<Card>& hand, std::optional<Card> trump)
 {
     PlaySituation situation;
     situation.hand = hand;
     situation.legal = hand; // leading, so every card is legal
     situation.trump = trump;
-    situation.playerCount = playerCount;
     return situation;
 }
 
 PlaySituation following(const std::vector<Card>& hand, const std::vector<Card>& legal,
                         const std::vector<Card>& playedCards, Suit leadSuit,
-                        std::optional<Card> trump, unsigned int playerCount = 4)
+                        std::optional<Card> trump)
 {
     PlaySituation situation;
     situation.hand = hand;
@@ -72,7 +72,6 @@ PlaySituation following(const std::vector<Card>& hand, const std::vector<Card>& 
     situation.playedCards = playedCards;
     situation.leadSuit = leadSuit;
     situation.trump = trump;
-    situation.playerCount = playerCount;
     return situation;
 }
 
@@ -121,6 +120,39 @@ TEST_CASE("Cyborg play: worked example 7.4, ducking on lead throws the dearer sa
 
         REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == SevenHearts);
     }
+}
+
+TEST_CASE("Cyborg play: a ducking lead throws a trump before a higher plain card", "[cyborg]")
+{
+    // §7.4's two rows are both single-suit, so they never settle what "dearest"
+    // means ACROSS suits. §6 does: the liability score subsumes
+    // heuristics::isMoreDangerous, which puts any trump above any plain card
+    // whatever its rank.
+    //
+    // Both cards here score exactly 0 - every card that beats either is certainly
+    // in a hand - so the tie-break alone decides. Bare rank would lead the jack
+    // and keep the seven of trumps, which is the card that is later forced to
+    // ruff and take the trick DUCK exists to avoid.
+    const Card SevenDiamonds{Rank::Seven, Suit::Diamonds};
+    const Card JackSpades{Rank::Jack, Suit::Spades};
+    const Card QueenDiamonds{Rank::Queen, Suit::Diamonds};
+
+    const std::vector<Card> hand{SevenDiamonds, JackSpades};
+    const CyborgKnobs knobs{};
+
+    const OddsContext ctx = makeContext(4,
+                                        {Card{Rank::Ace, Suit::Diamonds}, Card{Rank::King, Suit::Diamonds},
+                                         Card{Rank::Ace, Suit::Spades}, Card{Rank::King, Suit::Spades}},
+                                        Suit::Diamonds, 4, 2);
+
+    const Plan plan = buildPlan(common::cardsToMask(hand, 4), 0, 0, ctx, knobs);
+    REQUIRE(plan.mode == Mode::Duck);
+
+    // The premise: neither card can win, so this is a pure tie-break.
+    REQUIRE(pLeadWins(common::cardToId(SevenDiamonds, 4), ctx) == 0.0f);
+    REQUIRE(pLeadWins(common::cardToId(JackSpades, 4), ctx) == 0.0f);
+
+    REQUIRE(choosePlay(leading(hand, QueenDiamonds), plan, ctx, knobs) == SevenDiamonds);
 }
 
 TEST_CASE("Cyborg play: DUCK throws the biggest safe card and TAKE the smallest", "[cyborg]")
@@ -192,9 +224,14 @@ TEST_CASE("Cyborg play: TAKE pays for a trick only when it is likely to hold", "
 
     SECTION("last to act: nothing can take it away, so win as cheaply as possible")
     {
-        const PlaySituation situation = following(
-            hand, hand, {SevenHearts, Card{Rank::Eight, Suit::Hearts}, Card{Rank::Two, Suit::Clubs}},
-            Suit::Hearts, std::nullopt);
+        // The third card is a club discard - a real card of the four-player deck,
+        // which runs Seven..Ace. A rank below the seven would be rejected by
+        // common::cardToId the moment any rule read the played cards through the
+        // odds kit, and passes today only because none of them does.
+        const PlaySituation situation =
+            following(hand, hand,
+                      {SevenHearts, Card{Rank::Eight, Suit::Hearts}, Card{Rank::Seven, Suit::Clubs}},
+                      Suit::Hearts, std::nullopt);
 
         REQUIRE(choosePlay(situation, plan, ctx, knobs) == NineHearts);
     }
@@ -222,7 +259,6 @@ TEST_CASE("Cyborg play: SHED never leads a sure winner", "[cyborg]")
     plan.need = 1;
     plan.mode = Mode::Shed;
     plan.winners = common::cardsToMask({AceSpades}, 4);
-    plan.losers = common::cardsToMask({NineDiamonds}, 4);
 
     REQUIRE(isSureWinner(common::cardToId(AceSpades, 4), ctx));
     REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == NineDiamonds);
@@ -270,7 +306,6 @@ TEST_CASE("Cyborg play: the planned lead wins trick one of a two-trick round", "
     Plan plan;
     plan.need = 1;
     plan.mode = Mode::Duck;
-    plan.losers = common::cardsToMask(hand, 4);
 
     // Nothing here can win, so every card scores 0 and section 6.1's DUCK
     // tie-break would lead the dearest card, the king. The stored lead is the
@@ -320,7 +355,6 @@ TEST_CASE("Cyborg play: buildPlan picks the mode from the gap between bid and tr
         REQUIRE(plan.mode == Mode::Duck);
         REQUIRE(plan.need == 0);
         REQUIRE(plan.winners == 0);
-        REQUIRE(plan.losers == handMask);
     }
 
     SECTION("every remaining trick is needed: TAKE")
@@ -334,7 +368,6 @@ TEST_CASE("Cyborg play: buildPlan picks the mode from the gap between bid and tr
     {
         const Plan plan = buildPlan(handMask, 1, 0, ctx, knobs);
         REQUIRE(plan.mode == Mode::Shed);
-        REQUIRE(plan.surplus > knobs.slack);
         REQUIRE(common::popcount(plan.winners) == 1);
     }
 
@@ -372,6 +405,85 @@ TEST_CASE("Cyborg play: feasibility measures the distance from taking exactly n"
     REQUIRE(feasibility(junkMask, 1, ctx) == 0.0f);
 }
 
+TEST_CASE("Cyborg play: the BALANCE lead cashes or coasts on whether its winners are certain",
+          "[cyborg]")
+{
+    // §6.1's BALANCE lead, which nothing else covers. Every plan here comes out
+    // of buildPlan rather than being assembled by hand, because the arm's three
+    // branches turn on `expected` - a field a hand-built Plan leaves at zero.
+    const CyborgKnobs knobs{};
+
+    const Card AceSpades{Rank::Ace, Suit::Spades};
+    const Card QueenSpades{Rank::Queen, Suit::Spades};
+    const Card EightHearts{Rank::Eight, Suit::Hearts};
+
+    SECTION("certain winners, so lead the safest loser and keep them")
+    {
+        // The ace cannot be beaten, so the one trick owed is already paid for.
+        // Leading it now would spend a certainty on a trick the plan does not
+        // need yet.
+        const std::vector<Card> hand{AceSpades, SevenHearts, EightHearts};
+
+        const OddsContext ctx = makeContext(4,
+                                            {Card{Rank::Nine, Suit::Hearts}, TenHearts, Card{Rank::Jack, Suit::Hearts},
+                                             QueenHearts, KingHearts, Card{Rank::Seven, Suit::Spades}},
+                                            std::nullopt, 6, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+        REQUIRE(plan.expected == 1.0f); // the ace, and nothing less than certain
+
+        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == SevenHearts);
+    }
+
+    SECTION("a winner that is merely likely gets cashed while it is still worth something")
+    {
+        // The queen is the plan's winner but the king may yet beat it, so the bid
+        // is not paid for. Lead it now rather than watch it shrink.
+        const std::vector<Card> hand{QueenSpades, SevenHearts, EightHearts};
+
+        const OddsContext ctx = makeContext(4,
+                                            {Card{Rank::King, Suit::Spades}, Card{Rank::Seven, Suit::Spades},
+                                             Card{Rank::Nine, Suit::Hearts}, TenHearts,
+                                             Card{Rank::Jack, Suit::Hearts}, QueenHearts},
+                                            std::nullopt, 3, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 1, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+        REQUIRE(plan.expected < 1.0f); // likely, not certain
+
+        REQUIRE(choosePlay(leading(hand, std::nullopt), plan, ctx, knobs) == QueenSpades);
+    }
+
+    SECTION("a plain winner is cashed ahead of a trump one while trumps are live")
+    {
+        // Holding the top trump and a good spade: the spade is the one that gets
+        // worse every trick trumps stay out, so it goes first even though the
+        // trump is the dearer card.
+        const Card AceHearts{Rank::Ace, Suit::Hearts};
+        const Card KingSpades{Rank::King, Suit::Spades};
+        const Card SevenDiamonds{Rank::Seven, Suit::Diamonds};
+
+        const std::vector<Card> hand{AceHearts, KingSpades, SevenDiamonds};
+
+        const OddsContext ctx = makeContext(4,
+                                            {KingHearts, QueenHearts, Card{Rank::Seven, Suit::Spades},
+                                             Card{Rank::King, Suit::Diamonds}, Card{Rank::Queen, Suit::Diamonds},
+                                             Card{Rank::Jack, Suit::Diamonds}, Card{Rank::Ten, Suit::Diamonds},
+                                             Card{Rank::Nine, Suit::Diamonds}, Card{Rank::Eight, Suit::Diamonds}},
+                                            Suit::Hearts, 3, 3);
+
+        const Plan plan = buildPlan(common::cardsToMask(hand, 4), 2, 0, ctx, knobs);
+        REQUIRE(plan.mode == Mode::Balance);
+        // The ace of trumps is certain, the king of spades is not - so without the
+        // trump rule this arm would cash the ace.
+        REQUIRE(plan.expected < 2.0f);
+
+        REQUIRE(choosePlay(leading(hand, Card{Rank::Seven, Suit::Hearts}), plan, ctx, knobs) ==
+                KingSpades);
+    }
+}
+
 TEST_CASE("Cyborg play: section 6.3 compares the two hands the decision leaves behind", "[cyborg]")
 {
     // BALANCE, following, able to win and not sure it should. The rule compares
@@ -395,7 +507,6 @@ TEST_CASE("Cyborg play: section 6.3 compares the two hands the decision leaves b
         plan.need = 1;
         plan.mode = Mode::Balance;
         plan.winners = common::cardsToMask({AceHearts}, 4);
-        plan.losers = common::cardsToMask({EightClubs}, 4);
 
         const PlaySituation situation =
             following(hand, hand, {KingHearts}, Suit::Hearts, std::nullopt);
@@ -419,7 +530,6 @@ TEST_CASE("Cyborg play: section 6.3 compares the two hands the decision leaves b
         plan.need = 1;
         plan.mode = Mode::Balance;
         plan.winners = common::cardsToMask({QueenHearts}, 4);
-        plan.losers = common::cardsToMask({EightClubs}, 4);
 
         const PlaySituation situation =
             following(hand, hand, {Card{Rank::Jack, Suit::Hearts}}, Suit::Hearts, std::nullopt);
@@ -456,7 +566,6 @@ TEST_CASE("Cyborg play: worked example 7.3 finishes hearts before starting diamo
         Plan plan;
         plan.mode = Mode::Take;
         plan.need = 4;
-        plan.losers = common::cardsToMask(hand, 4);
 
         PlaySituation situation = leading(hand, std::nullopt);
         situation.cashingSuit = cashing;
@@ -518,37 +627,97 @@ TEST_CASE("Cyborg play: worked example 7.3 finishes hearts before starting diamo
     REQUIRE(leadWith(hand4, unseen4, 15, Suit::Hearts) == AceDiamonds);
 }
 
-TEST_CASE("CyborgStrategy: the cashing suit follows this seat's own leads", "[cyborg]")
+TEST_CASE("CyborgStrategy: the cashing suit follows this seat's cashes, not its every lead",
+          "[cyborg]")
 {
     // The hint section 6.1 needs is the only thing card play carries between
-    // tricks, so it is worth pinning where it comes from: a card this seat LED,
-    // and nothing else.
-    CyborgStrategy strategy;
-    strategy.onRoundStart(4, 2, std::nullopt, 0, 0);
+    // tricks, so it is worth pinning what it MEANS: the suit this hand is
+    // part-way through cashing. A lead that was not a cash ends the run, and
+    // recording it anyway is what sent a later TAKE lead chasing the suit of a
+    // discard - section 7.3's whole point, inverted.
+    cyborg::CyborgKnobs knobs;
+    knobs.useHeuristicPlay = false; // the hint is only ever read by section 6 play
 
-    REQUIRE_FALSE(strategy.getCashingSuit().has_value());
+    const Card AceSpades{Rank::Ace, Suit::Spades};
+    const Card KingSpades{Rank::King, Suit::Spades};
+    const Card SevenSpades{Rank::Seven, Suit::Spades};
+    const Card EightSpades{Rank::Eight, Suit::Spades};
+    const Card NineSpades{Rank::Nine, Suit::Spades};
+    const Card TenSpades{Rank::Ten, Suit::Spades};
 
-    const std::vector<Card> hand{Card{Rank::Ace, Suit::Spades}, SevenHearts};
-    const std::vector<Card> nothingPlayed{};
-    const PlayContext leadContext{hand, nothingPlayed, std::nullopt, std::nullopt, 1, 0};
-
-    const std::optional<Card> led = strategy.getBestChoice(leadContext);
-    REQUIRE(led.has_value());
-    REQUIRE(strategy.getCashingSuit() == led->suit);
-
-    // Following somebody else's lead says nothing about which suit this hand is
-    // working through, so the hint must not move.
-    const Suit before = *strategy.getCashingSuit();
-    const std::vector<Card> remaining{SevenHearts};
-    const std::vector<Card> played{KingHearts};
-    const PlayContext followContext{remaining, played, std::nullopt, Suit::Hearts, 1, 0};
-
-    REQUIRE(strategy.getBestChoice(followContext).has_value());
-    REQUIRE(strategy.getCashingSuit() == before);
-
-    // And a new round starts from nothing.
+    CyborgStrategy strategy(knobs);
     strategy.onRoundStart(4, 3, std::nullopt, 0, 0);
+
     REQUIRE_FALSE(strategy.getCashingSuit().has_value());
+
+    // Trick one. The bid needs every remaining trick, so the mode is TAKE, and
+    // both spades are certainties - the ace outright, the king because the ace
+    // that would beat it is in this same hand. Spades is also the longer suit,
+    // so section 6.1 cashes the ace.
+    const std::vector<Card> hand1{AceSpades, KingSpades, SevenHearts};
+    const std::vector<Card> nothingPlayed{};
+
+    REQUIRE(strategy.getBestChoice(PlayContext{hand1, nothingPlayed, std::nullopt, std::nullopt, 3,
+                                               0}) == AceSpades);
+    REQUIRE(strategy.getCashingSuit() == Suit::Spades);
+
+    // Everyone follows, and the trick comes back to this seat.
+    strategy.onCardPlayed(0, AceSpades);
+    strategy.onCardPlayed(1, SevenSpades);
+    strategy.onCardPlayed(2, EightSpades);
+    strategy.onCardPlayed(3, NineSpades);
+    strategy.onTrickWon(0);
+
+    const std::vector<Card> hand2{KingSpades, SevenHearts};
+
+    SECTION("a second cash in the same suit keeps it")
+    {
+        REQUIRE(strategy.getBestChoice(PlayContext{hand2, nothingPlayed, std::nullopt, std::nullopt,
+                                                   3, 1}) == KingSpades);
+        REQUIRE(strategy.getCashingSuit() == Suit::Spades);
+        REQUIRE(strategy.getFallbacksTaken() == 0);
+    }
+
+    SECTION("a lead that is not a cash ends the run")
+    {
+        // Cash the king, then lead the seven of hearts - which nothing makes
+        // certain, so it is a discard rather than a cash.
+        REQUIRE(strategy.getBestChoice(PlayContext{hand2, nothingPlayed, std::nullopt, std::nullopt,
+                                                   3, 1}) == KingSpades);
+
+        strategy.onCardPlayed(0, KingSpades);
+        strategy.onCardPlayed(1, TenSpades);
+        strategy.onCardPlayed(2, QueenHearts);
+        strategy.onCardPlayed(3, TenHearts);
+        strategy.onTrickWon(0);
+
+        const std::vector<Card> hand3{SevenHearts};
+
+        REQUIRE(strategy.getBestChoice(PlayContext{hand3, nothingPlayed, std::nullopt, std::nullopt,
+                                                   3, 2}) == SevenHearts);
+        REQUIRE_FALSE(strategy.getCashingSuit().has_value());
+        REQUIRE(strategy.getFallbacksTaken() == 0);
+    }
+
+    SECTION("following somebody else's trick leaves it alone")
+    {
+        // A card played to another seat's trick says nothing about which suit
+        // this hand is working through.
+        strategy.onCardPlayed(1, TenSpades);
+
+        const std::vector<Card> played{TenSpades};
+        REQUIRE(strategy
+                    .getBestChoice(PlayContext{hand2, played, std::nullopt, Suit::Spades, 3, 1})
+                    .has_value());
+        REQUIRE(strategy.getCashingSuit() == Suit::Spades);
+        REQUIRE(strategy.getFallbacksTaken() == 0);
+    }
+
+    SECTION("and a new round starts from nothing")
+    {
+        strategy.onRoundStart(4, 2, std::nullopt, 0, 0);
+        REQUIRE_FALSE(strategy.getCashingSuit().has_value());
+    }
 }
 
 TEST_CASE("Cyborg play: a whole game of section 6 play is legal and needs no fallback", "[cyborg]")

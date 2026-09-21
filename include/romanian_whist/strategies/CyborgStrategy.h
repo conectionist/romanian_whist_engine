@@ -42,9 +42,14 @@ private:
     std::string playerName;
     std::optional<Card> plannedLead;
 
-    // The suit of the last card this seat led, and empty until it leads one.
-    // §6.1's cashing rule finishes a suit before starting another, and this is
-    // the only thing it needs to remember across tricks.
+    // The suit this seat is part-way through CASHING, and empty whenever it is
+    // not cashing one. §6.1's cashing rule finishes a suit before starting
+    // another, and this is the only thing it needs to remember across tricks.
+    //
+    // Set only by a lead that was itself a cash - a TAKE-mode lead of a sure
+    // winner - and CLEARED by any other lead. Recording every lead instead would
+    // make a DUCK or BALANCE lead of a junk card send §6.1 chasing that suit on a
+    // later trick, which is the bug this comment exists to prevent recurring.
     std::optional<Suit> cashingSuit;
 
     // How many decisions fell through to the heuristic because the memory did
@@ -113,15 +118,26 @@ private:
     std::optional<Card> heuristicPlay(const PlayContext& context,
                                       const std::vector<Card>& legal) const;
 
+    // A chosen card, plus whether choosing it was an act of CASHING - a TAKE-mode
+    // lead of a sure winner. Only the decision layer can tell, and it is const,
+    // so the fact has to travel back out to the non-const caller rather than be
+    // recorded in place. See cashingSuit above for why the distinction matters.
+    struct PlayDecision
+    {
+        std::optional<Card> card;
+        bool cashing = false;
+    };
+
     // The section 5 plan and the section 6 card choice, over the legal list the
     // caller already computed from the context. Throws through the odds kit for
     // a hand the memory cannot describe, which the caller contains.
-    std::optional<Card> cyborgPlay(const PlayContext& context, const std::vector<Card>& legal,
-                                   common::Mask myHand) const;
+    PlayDecision cyborgPlay(const PlayContext& context, const std::vector<Card>& legal,
+                            common::Mask myHand) const;
 
-    // Remembers the suit of a card this seat LED, which is all §6.1's cashing
-    // rule needs to carry from one trick to the next.
-    void noteLead(const PlayContext& context, const Card& played);
+    // Updates the cashing suit from a card this seat is about to play. `cashing`
+    // says whether that card was chosen as a cash; a lead that was not one ends
+    // the run, so it clears the suit rather than leaving it to mislead §6.1.
+    void noteLead(const PlayContext& context, const Card& played, bool cashing);
 };
 
 // Builds a Cyborg seat and registers it as an observer of `engine`, which must

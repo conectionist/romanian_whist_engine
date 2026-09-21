@@ -300,8 +300,10 @@ bidding: +3.9, +5.7, +0.3, −3.3, −4.5 at 2–6 players. The gate still fails
 - `strategies/cyborg/Play.h` / `.cpp`: `choosePlay(const PlaySituation&, const Plan&, const OddsContext&,
   const CyborgKnobs&)`. `PlaySituation` is populated entirely from `PlayContext` and holds the
   already-filtered legal list. **It takes no memory parameter**, so the context-is-authoritative rule
-  cannot be broken by accident. Every argmax/argmin iterates the legal list; intersect `Plan::winners`
-  with the legal mask at the point of choice.
+  cannot be broken by accident. It takes no player count either — `PlayContext` has none, so a field
+  for it could only come from the memory. Every argmax/argmin iterates the legal list, and *that* is
+  the intersection with `Plan::winners`: walking the legal list and testing the mask needs no separate
+  legal mask to `&` with, and an earlier draft's one was a no-op.
 - `CyborgKnobs` gains `holdThreshold = 0.50f` and `slack = 0.75f`. Flip `useHeuristicPlay` to `false`.
 - `endgameCards` (§6.5) is **not** added. Enumeration is up to 5040 distributions per decision at six
   players, against a microsecond budget. Leave it for a later, measured, capped addition.
@@ -323,8 +325,11 @@ Rebuild the plan at **every** decision, not once per round.
 
 - **DUCK vs TAKE discard asymmetry.** From the same safe list, DUCK throws the **highest**-liability card,
   TAKE the **lowest**. The design calls getting this backwards "the single most expensive bug available".
-- **DUCK tie-break when leading (§6.1).** Among near-equal low win chances, lead the **highest rank**.
-  §7.4: holding `Q♥ 7♥` with only `K♥` live, lead the queen.
+- **DUCK tie-break when leading (§6.1).** Among near-equal low win chances, lead the **dearest** by
+  `heuristics::isMoreDangerous` — any trump above any plain card, rank within that. §7.4: holding
+  `Q♥ 7♥` with only `K♥` live, lead the queen. *Revised in review:* this was "highest rank", which is
+  the same thing inside one suit and the wrong thing across two — bare rank keeps a small trump and
+  throws a bigger plain card, and the retained trump is then forced to ruff.
 - **SHED never leads a sure winner.** This relies on `isSureWinner` and `isSureLoserOnLead` excluding
   each other — guaranteed since PR #20, and tested.
 - **TAKE with sure winners** cashes from the longest suit, highest first. **TAKE with no aces** leads the
@@ -414,6 +419,11 @@ strategy, the way 4.2.0 did it for Reckoner — likely a minor version bump.
 - **`roundInitialised` is never cleared** (design §8). An observer removed mid-game is detected only by
   its consequence (`agreesWith` fallbacks), not its cause. Shared with Reckoner; fixing it changes
   shared state.
+- **The build sets no warning flags.** `CMakeLists.txt` has only `target_compile_features`, so
+  `-Wswitch` — which is what stops a new `Mode` from being silently unhandled — is off. The cyborg
+  sources are clean under `-Wall -Wextra` today; turning them on project-wide is a separate change
+  because it will surface warnings in older files, and it belongs with Phase 4's tidy-up rather than
+  in the middle of card play.
 - **`pHolds` over-counts slightly.** A seat void in both the lead suit and trump adds nothing to the
   marked set but still adds its hand to the draw size. That biases towards pessimism (a lower hold
   probability), which is the safe direction. Refine only if Phase 3 measurements show it mattering.

@@ -589,3 +589,76 @@ TEST_CASE("Cyborg odds: makeOddsContext refuses a memory that disagrees about tr
     REQUIRE_THROWS_AS(makeOddsContext(memory, myHand, Suit::Spades, 0.6f), std::logic_error);
     REQUIRE_THROWS_AS(makeOddsContext(memory, myHand, std::nullopt, 0.6f), std::logic_error);
 }
+
+TEST_CASE("Cyborg odds: a ScoreCache answers exactly as pLeadWins would", "[cyborg]")
+{
+    // The cache exists so one decision scores each card once. It is only worth
+    // having if it is indistinguishable from the thing it replaces - bit for bit,
+    // since §6.1's DUCK tie-break compares scores against an epsilon and §6.3
+    // compares two sums of them.
+    OddsContext ctx;
+    ctx.playerCount = 4;
+    ctx.mySeat = 0;
+    ctx.trumpSuit = Suit::Hearts;
+
+    const std::vector<Card> unseen{{Rank::Ace, Suit::Hearts},  {Rank::King, Suit::Hearts},
+                                   {Rank::Ten, Suit::Hearts},  {Rank::Ace, Suit::Spades},
+                                   {Rank::Nine, Suit::Spades}, {Rank::King, Suit::Clubs},
+                                   {Rank::Eight, Suit::Clubs}, {Rank::Queen, Suit::Diamonds}};
+    ctx.unseen = common::cardsToMask(unseen, 4);
+    ctx.handsOutstanding = 6;
+    ctx.handSize[0] = 4;
+    for(unsigned int seat = 1; seat < 4; ++seat)
+    {
+        ctx.handSize[seat] = 2;
+    }
+    ctx.duckPropensity = 0.60f;
+
+    const std::vector<Card> hand{{Rank::Queen, Suit::Hearts},
+                                 {Rank::King, Suit::Spades},
+                                 {Rank::Seven, Suit::Clubs},
+                                 {Rank::Jack, Suit::Diamonds}};
+    const common::Mask handMask = common::cardsToMask(hand, 4);
+
+    const ScoreCache cache = makeScoreCache(handMask, ctx);
+
+    for(const Card& card : hand)
+    {
+        const common::CardId c = common::cardToId(card, 4);
+
+        REQUIRE(cache.of(c, ctx) == pLeadWins(c, ctx));
+    }
+
+    SECTION("a card it was not given falls through rather than answering zero")
+    {
+        // Every unseen card is outside the cache, and a silent 0.0f for one of them
+        // would be a plausible-looking wrong answer rather than a crash.
+        for(const Card& card : unseen)
+        {
+            const common::CardId c = common::cardToId(card, 4);
+
+            REQUIRE(cache.of(c, ctx) == pLeadWins(c, ctx));
+        }
+    }
+
+    SECTION("an empty cache is a pure pass-through")
+    {
+        const ScoreCache empty;
+
+        for(const Card& card : hand)
+        {
+            const common::CardId c = common::cardToId(card, 4);
+
+            REQUIRE(empty.of(c, ctx) == pLeadWins(c, ctx));
+        }
+    }
+
+    SECTION("it carries the deck bounds check with it")
+    {
+        // A rank the four-player deck does not hold cannot be converted at all, and
+        // an id past the deck throws out of pLeadWins rather than reading the
+        // cache's tail.
+        REQUIRE_THROWS_AS(common::cardToId(Card{Rank::Two, Suit::Clubs}, 4), std::invalid_argument);
+        REQUIRE_THROWS_AS(cache.of(40, ctx), std::invalid_argument);
+    }
+}

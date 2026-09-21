@@ -30,6 +30,19 @@ bool isMoreDangerous(const Card& a, const Card& b, std::optional<Card> trump);
 std::optional<Card> mostDangerous(const std::vector<Card>& cards, std::optional<Card> trump);
 std::optional<Card> leastDangerous(const std::vector<Card>& cards, std::optional<Card> trump);
 
+// The two halves of a legal list, split on the card currently winning the trick.
+// "Safe" is exact rather than a guess: a card that does not beat the current best
+// cannot take the trick however the rest of it goes, because the players still to
+// act only push the winner higher.
+//
+// Both push in INPUT ORDER, for the reason given above - every list handed to
+// mostDangerous()/leastDangerous() must preserve the hand's order, and these are
+// the lists that get handed to them.
+std::vector<Card> safeCards(const std::vector<Card>& legalCards, const Card& currentBest,
+                            Suit leadSuit, std::optional<Card> trump);
+std::vector<Card> winningCards(const std::vector<Card>& legalCards, const Card& currentBest,
+                               Suit leadSuit, std::optional<Card> trump);
+
 // The play that best avoids taking the trick.
 //
 // Leading, nothing is safe - whatever goes down might hold - so it leads its

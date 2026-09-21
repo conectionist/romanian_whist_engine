@@ -104,6 +104,43 @@ bool isSureLoserOnLead(common::CardId c, const OddsContext& ctx);
 // duckPropensity is the knob that absorbs it.
 float pLeadWins(common::CardId c, const OddsContext& ctx);
 
+// One pLeadWins() score per card, computed once and reused for the rest of ONE
+// decision.
+//
+// pLeadWins() is a deck-profile range check, two divisions, a loop over the seats
+// and a pair of table lookups - cheap, but a single decision asks for the same
+// card's score three or four times over: §5's plan scores the whole hand, §6.1's
+// argmax rescores the legal list, and §6.3's two one-ply probes each rescore the
+// hand bar one card. This is that answer, memoised.
+//
+// SCOPED TO ONE DECISION, and deliberately not stored anywhere. Every score
+// depends on the whole OddsContext - the unseen set changes with every card
+// played - so a cache that outlived its position would not be stale, it would be
+// wrong. Build one at the top of a decision, pass it down, let it die there.
+// `of()` falls back to computing when a card is not in the cache, so a caller
+// that has no cache to offer is not a special case.
+struct ScoreCache
+{
+    // 8 ranks per player, four suits, at most six players. The same bound
+    // DeckProfile's aboveMasks/belowMasks already use.
+    static constexpr unsigned int MaxDeckSize = 48;
+
+    common::Mask known = 0;
+    std::array<float, MaxDeckSize> score{};
+
+    float of(common::CardId c, const OddsContext& ctx) const
+    {
+        if(c < MaxDeckSize && (known & common::cardBit(c)) != 0)
+            return score[c];
+
+        return pLeadWins(c, ctx);
+    }
+};
+
+// Scores every card in `cards` - which must be a subset of one deck - into a
+// cache. Throws through pLeadWins() for a card id outside that deck.
+ScoreCache makeScoreCache(common::Mask cards, const OddsContext& ctx);
+
 // §3.4. P(this card still wins if I play it now), given it already beats the
 // trick's current best card. Only the seats yet to act can take it away, and
 // follow-suit restricts what they may play.

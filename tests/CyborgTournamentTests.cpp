@@ -102,8 +102,15 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding, pinne
     // reported rather than tuned away: heuristic play grabs tricks while short of
     // its bid and ducks once it has them, which rewards bidding low, and section
     // 4's bids have no plan behind them until Phase 3. So the totals are pinned
-    // exactly instead. Any change to bidding - or Phase 3's card play - moves
-    // them, and the new numbers are read and re-pinned on purpose.
+    // exactly instead. Any change to bidding moves them, and the new numbers are
+    // read and re-pinned on purpose.
+    //
+    // CARD PLAY DOES NOT MOVE THESE. Both arms set useHeuristicPlay = true below,
+    // so neither seat ever reaches cyborg::choosePlay: this pins section 4 bidding
+    // against heuristic bidding, with heuristic play on both sides. If a change
+    // confined to card play does move them, something leaked - a shared helper the
+    // heuristics also reach - and that is the thing to find, not a number to
+    // re-pin.
     //
     // No WHIST_PIN_FLOAT_GOLDENS gate: LowRisk has no floats, and Cyborg's odds
     // use only basic arithmetic. CI on all three platforms is what confirms that
