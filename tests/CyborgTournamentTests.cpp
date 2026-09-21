@@ -25,8 +25,11 @@ using namespace romanian_whist::test;
 // measures.
 //
 // No WHIST_PIN_FLOAT_GOLDENS gate: LowRisk has no floats, and Cyborg's odds use
-// only basic arithmetic. CI on all three platforms is what confirms that holds;
-// if one diverges, gate these the way the Reckoner pins are gated.
+// only basic arithmetic - which rounds identically everywhere ONLY because the
+// engine is built with -ffp-contract=off (see CMakeLists.txt). Without it,
+// macOS/arm64 fuses multiply-adds, section 6 play breaks a few ties the other
+// way, and these totals move. If one diverges again, suspect contraction before
+// reaching for a gate.
 
 namespace
 {

@@ -43,6 +43,18 @@ add_library(RomanianWhist::engine ALIAS romanian_whist_engine)
 
 target_compile_features(romanian_whist_engine PUBLIC cxx_std_20)
 
+# NO FLOATING-POINT CONTRACTION. Left to itself a compiler may fuse `a + b * c`
+# into one fused multiply-add, which rounds once instead of twice - and the ARM
+# toolchains do so by default. Cyborg's card play breaks ties between scores that
+# agree to the last bit, so one differently rounded sum changes which card is
+# played and the game diverges from there: the Phase 3b tournament pins moved on
+# macOS/arm64 while Linux and Windows matched them exactly. With contraction off
+# the engine computes the same floats on every platform. (MSVC does not contract
+# under its default /fp:precise.) PRIVATE, so a consumer's own code keeps
+# whatever its build chose.
+target_compile_options(romanian_whist_engine PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-ffp-contract=off>)
+
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/romanian_whist/Version.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/include/romanian_whist/Version.h

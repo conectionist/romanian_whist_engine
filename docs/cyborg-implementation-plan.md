@@ -110,11 +110,16 @@ one `CardId` bounds check, so anything reaching those masks must go through it f
 
 **Floats.** Reckoner's exact-score pin (`tests/ReckonerStrategyTests.cpp`) is compiled only under
 `WHIST_PIN_FLOAT_GOLDENS` (Linux/GCC), because `std::exp`/`std::pow` differ across libm and change
-tie-breaks. Cyborg's odds are multiplication and division only, which is IEEE-754 exact, so Cyborg
-fixtures are portable — **do not gate them**. Use exact `==` where the design claims certainty
-(`0.0f`, `1.0f`) and `WithinAbs(…, 1e-5)` for estimates. **Tournament score pins are a different
-matter**: Cyborg itself is float-free, but a table containing Reckoner is not — gate any exact score
-involving a Reckoner seat the same way.
+tie-breaks. Cyborg uses only basic arithmetic, which IEEE-754 rounds the same way everywhere —
+**provided the compiler does not fuse `a + b * c` into one fused multiply-add**. ARM toolchains do by
+default, and Phase 3b's tournament pins moved on macOS/arm64 while Linux and Windows matched them,
+because §6 play breaks ties at the last bit. So the engine builds with `-ffp-contract=off` (GCC and
+Clang, private to the library), and with that Cyborg's fixtures and pins are portable — **do not gate
+them**. If one ever diverges on one platform, suspect contraction first: on an FMA-capable x86, a
+clang build with `-DCMAKE_CXX_FLAGS="-mfma -ffp-contract=on"` minus the engine's own flag reproduced
+the macOS numbers exactly. Use exact `==` where the design claims certainty (`0.0f`, `1.0f`) and
+`WithinAbs(…, 1e-5)` for estimates. **A table containing Reckoner is different**: gate any exact score
+involving a Reckoner seat the same way as Reckoner's own pin.
 
 **Integer-ness of a float sum.** §4.1 branches on "is `raw` an integer". Knob values like `0.60` are not
 binary-exact. Use `std::fabs(raw - std::round(raw)) < 1e-4f`, never `raw == std::floor(raw)`.
