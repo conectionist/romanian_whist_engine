@@ -3,6 +3,7 @@
 #include <romanian_whist/strategies/common/Hypergeometric.h>
 
 #include <algorithm>
+#include <bit>
 #include <stdexcept>
 #include <string>
 
@@ -255,6 +256,28 @@ float pHolds(common::CardId c, unsigned int seatsYetToAct, Suit leadSuit, const 
     // set - the same approximation reachableBeaters() makes, and for the same
     // reason: it is what a card COULD be, not how many are drawn.
     return common::hyper0(count(beaters(c, pool, ctx)), unseenCount, outstanding);
+}
+
+ScoreCache makeScoreCache(common::Mask cards, const OddsContext& ctx)
+{
+    ScoreCache cache;
+
+    common::Mask rest = cards;
+    while(rest != 0)
+    {
+        const auto id = static_cast<common::CardId>(std::countr_zero(rest));
+        rest &= rest - 1ULL;
+
+        if(id >= ScoreCache::MaxDeckSize)
+            continue;
+
+        // pLeadWins() carries the deck bounds check, so an id this deck cannot
+        // hold throws here rather than being silently cached.
+        cache.score[id] = pLeadWins(id, ctx);
+        cache.known |= common::cardBit(id);
+    }
+
+    return cache;
 }
 
 } // namespace romanian_whist::cyborg

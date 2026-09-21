@@ -7,8 +7,6 @@
 
 namespace romanian_whist::heuristics
 {
-namespace
-{
 // Every legal card that cannot take the trick as it currently stands.
 std::vector<Card> safeCards(const std::vector<Card>& legalCards,
                             const Card& currentBest,
@@ -44,8 +42,6 @@ std::vector<Card> winningCards(const std::vector<Card>& legalCards,
 
     return winners;
 }
-
-} // namespace
 
 bool isMoreDangerous(const Card& a, const Card& b, std::optional<Card> trump)
 {

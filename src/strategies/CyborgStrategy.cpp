@@ -3,6 +3,7 @@
 #include <romanian_whist/AiMoveProvider.h>
 #include <romanian_whist/strategies/TrickHeuristics.h>
 #include <romanian_whist/strategies/cyborg/Bidding.h>
+#include <romanian_whist/strategies/cyborg/Play.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -39,6 +40,11 @@ std::size_t CyborgStrategy::getFallbacksTaken() const
 const std::optional<Card>& CyborgStrategy::getPlannedLead() const
 {
     return plannedLead;
+}
+
+const std::optional<Suit>& CyborgStrategy::getCashingSuit() const
+{
+    return cashingSuit;
 }
 
 const common::RoundMemory& CyborgStrategy::getMemory() const
@@ -210,6 +216,67 @@ unsigned int CyborgStrategy::getBestBet(const BetContext& context)
     }
 }
 
+CyborgStrategy::PlayDecision CyborgStrategy::cyborgPlay(const PlayContext& context,
+                                                        const std::vector<Card>& legal,
+                                                        common::Mask myHand) const
+{
+    // Three things here can throw, and all of them are the fallback working:
+    // makeOddsContext() when the memory and the context disagree about trump,
+    // and buildPlan()/choosePlay() through cardToId() for a deck the memory
+    // cannot describe. The caller's catch turns each into the heuristic.
+    const cyborg::OddsContext odds = cyborg::makeOddsContext(
+        memory, myHand, context.trump ? std::optional(context.trump->suit) : std::nullopt,
+        knobs.duckPropensity);
+
+    // Scored once, here, and shared by the plan and the card choice: between them
+    // they would otherwise ask for the same card's pLeadWins three or four times.
+    const cyborg::ScoreCache scores = cyborg::makeScoreCache(myHand, odds);
+
+    const cyborg::Plan plan =
+        cyborg::buildPlan(myHand, context.bet, context.tricksWon, odds, knobs, &scores);
+
+    // Everything below comes from the context and the legal list the caller
+    // already computed. The memory reaches this decision only through `odds`,
+    // which is about what the OTHER hands might hold.
+    cyborg::PlaySituation situation;
+    situation.hand = context.hand;
+    situation.legal = legal;
+    situation.playedCards = context.playedCards;
+    situation.trump = context.trump;
+    situation.leadSuit = context.leadSuit;
+    situation.plannedLead = plannedLead;
+    situation.cashingSuit = cashingSuit;
+
+    const std::optional<Card> chosen = cyborg::choosePlay(situation, plan, odds, knobs, &scores);
+
+    if(!chosen)
+        return PlayDecision{};
+
+    // Was this a cash? Only a TAKE-mode lead of a sure winner is - §7.3's A, K,
+    // J run is three of them in a row, while a DUCK or BALANCE lead of a junk
+    // card is not one and must not leave a hint behind. Asking isSureWinner()
+    // again is cheaper than threading an answer out of every rule in §6.1.
+    const bool cashing = plan.mode == cyborg::Mode::Take && context.playedCards.empty() &&
+                         cyborg::isSureWinner(common::cardToId(*chosen, odds.playerCount), odds);
+
+    return PlayDecision{chosen, cashing};
+}
+
+void CyborgStrategy::noteLead(const PlayContext& context, const Card& played, bool cashing)
+{
+    // Only a card this seat LED says anything. A card played to somebody else's
+    // trick says nothing about which suit this hand is working through, and
+    // recording it would send §6.1 chasing the opener's.
+    if(!context.playedCards.empty())
+        return;
+
+    // A lead that was not a cash ENDS the run: once this hand leads something
+    // else, there is no suit it is part-way through. Leaving the old suit in
+    // place is what let a junk lead redirect a later TAKE lead away from §6.1's
+    // longest suit.
+    cashingSuit = cashing ? std::optional<Suit>(played.suit) : std::nullopt;
+}
+
 std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
 {
     requireMemory("getBestChoice");
@@ -227,14 +294,19 @@ std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
     if(legal.empty())
         return std::nullopt;
 
-    std::optional<Card> chosen;
+    PlayDecision decision;
 
     try
     {
         const common::Mask myHand = encodeHand(context.hand);
 
         if(agreesWith(myHand, context.hand.size(), context.playedCards.size()))
-            chosen = heuristicPlay(context, legal);
+        {
+            // A heuristic lead is never a cash: the heuristics know nothing about
+            // §6.1's runs, so they must not leave a hint for it to follow.
+            decision = knobs.useHeuristicPlay ? PlayDecision{heuristicPlay(context, legal), false}
+                                              : cyborgPlay(context, legal, myHand);
+        }
     }
     catch(const std::logic_error&)
     {
@@ -242,19 +314,23 @@ std::optional<Card> CyborgStrategy::getBestChoice(const PlayContext& context)
         // card comes back.
     }
 
-    if(chosen && std::find(legal.begin(), legal.end(), *chosen) != legal.end())
-        return chosen;
+    if(!decision.card || std::find(legal.begin(), legal.end(), *decision.card) == legal.end())
+    {
+        // Either the memory disagreed with the position or it could not describe
+        // it. ReckonerStrategy settles for legal.front() here because it has no
+        // cheaper good answer linked; Cyborg does - the heuristics are already
+        // built, already tested, and pick a sensible card from the same legal
+        // list. Neither is a cash.
+        fallbacksTaken++;
 
-    // Either the memory disagreed with the position or it could not describe it.
-    // ReckonerStrategy settles for legal.front() here because it has no cheaper
-    // good answer linked; Cyborg does - the heuristics are already built, already
-    // tested, and pick a sensible card from the same legal list.
-    fallbacksTaken++;
+        const std::optional<Card> fallback = heuristicPlay(context, legal);
+        decision = PlayDecision{fallback ? fallback : std::optional<Card>(legal.front()), false};
+    }
 
-    if(const std::optional<Card> fallback = heuristicPlay(context, legal))
-        return fallback;
-
-    return legal.front();
+    // ONE tail, so the cashing suit cannot be left stale by a path that forgot to
+    // update it. Every exit that returns a card comes through here.
+    noteLead(context, *decision.card, decision.cashing);
+    return decision.card;
 }
 
 void CyborgStrategy::onGameStarted(const GameEngine& engine)
@@ -290,6 +366,7 @@ void CyborgStrategy::onGameStarted(const GameEngine& engine)
 void CyborgStrategy::onRoundStarted(const GameEngine& engine)
 {
     plannedLead = std::nullopt;
+    cashingSuit = std::nullopt;
     memory.initRound(engine.getPlayerCount(), engine.getCurrentRoundTrickCount(),
                      mySeat ? mySeat->index : 0, engine.getRoundLeaderSeat().index,
                      engine.getCurrentTrumpCard());
@@ -315,6 +392,7 @@ void CyborgStrategy::onRoundStart(unsigned int n, unsigned int r, std::optional<
                                   unsigned int openerSeat, unsigned int mySeatIdx)
 {
     plannedLead = std::nullopt;
+    cashingSuit = std::nullopt;
     memory.initRound(n, r, mySeatIdx, openerSeat, trump);
 }
 
