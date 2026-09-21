@@ -946,6 +946,7 @@ Written down so the test suite can aim at it.
 | Bid and play can disagree | §4.5 credits gap winners that §6.1 must then cash correctly | Test it directly: assert the eight-card lead order |
 | No tempo reasoning | It cannot plan to lose a trick in order to regain the lead later | The `BALANCE` alignment rule approximates it at one ply |
 | Side-suit aces score zero at two tricks | Correct on average, wrong when nobody is void | Accept; the round is worth ±2 |
+| `SHED` and `BALANCE` leads without trumps | With every card dealt, `pLeadWins` is 0 for any card with a higher card still out, apart from the duck term, so these two leads choose by that term. Measured, §6 play lost 1.3–5.9 points a game to heuristic play at 3–6 players, almost all of it in no-trump rounds | Heuristic play stays the default until the two leads are redesigned for no-trump rounds (Phase 3c) |
 
 ### An observer removed mid-game is not detected at its cause
 
