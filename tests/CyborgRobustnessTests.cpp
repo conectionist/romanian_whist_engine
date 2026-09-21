@@ -223,7 +223,17 @@ TEST_CASE("CyborgStrategy: a registered strategy still plays a whole legal game"
     GameEngine engine;
     GameSetup setup;
 
-    setup.seats.push_back(makeCyborgSeat("Cyborg", engine));
+    // Built by hand rather than with makeCyborgSeat() so the fallback counter can
+    // be read afterwards. Finishing the game is not enough on its own: a strategy
+    // whose memory disagreed with every position would finish one too, playing
+    // entirely on the heuristic. makeCyborgSeat() itself is exercised by
+    // CyborgStrategyTests.
+    auto strategy = std::make_unique<CyborgStrategy>(); // default knobs
+    CyborgStrategy* observer = strategy.get();
+    strategy->setPlayerName("Cyborg");
+    engine.addObserver(observer);
+
+    setup.seats.push_back(SeatSetup{"Cyborg", std::make_unique<AiMoveProvider>(std::move(strategy))});
     setup.seats.push_back({"LowRisk1", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
     setup.seats.push_back({"LowRisk2", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
     setup.shuffleSeed = 4242;
@@ -232,4 +242,5 @@ TEST_CASE("CyborgStrategy: a registered strategy still plays a whole legal game"
 
     REQUIRE_NOTHROW(engine.run());
     REQUIRE(engine.getStatus() == GameStatus::Finished);
+    REQUIRE(observer->getFallbacksTaken() == 0);
 }

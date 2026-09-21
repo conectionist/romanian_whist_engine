@@ -17,7 +17,7 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 | 0 | Extract `common::RoundMemory`, `common::CardMask`, `common::hyper0` out of Reckoner | ✅ merged, PR #19 |
 | 1 | `CyborgStrategy` seat with memory + guards, playing at LowRisk strength; the odds kit | ✅ merged, PR #20 (`9b12614`) |
 | 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
-| 3 | The plan and card play (§5, §6.1–§6.4) | in progress — split into 3a (modules, default off) and 3b (flip the default, re-pin) |
+| 3 | The plan and card play (§5, §6.1–§6.4) | 3a ✅ merged, PR #22 (`f634301`); 3b in review — measured, default stays heuristic play; 3c redesigns the no-trump leads, see §5 |
 | 4 | Tournament bar, refinements, documentation, release | not started |
 
 Baseline on master after Phase 1: **148 test cases on GCC Release and Debug, 147 on clang** (one
@@ -110,11 +110,16 @@ one `CardId` bounds check, so anything reaching those masks must go through it f
 
 **Floats.** Reckoner's exact-score pin (`tests/ReckonerStrategyTests.cpp`) is compiled only under
 `WHIST_PIN_FLOAT_GOLDENS` (Linux/GCC), because `std::exp`/`std::pow` differ across libm and change
-tie-breaks. Cyborg's odds are multiplication and division only, which is IEEE-754 exact, so Cyborg
-fixtures are portable — **do not gate them**. Use exact `==` where the design claims certainty
-(`0.0f`, `1.0f`) and `WithinAbs(…, 1e-5)` for estimates. **Tournament score pins are a different
-matter**: Cyborg itself is float-free, but a table containing Reckoner is not — gate any exact score
-involving a Reckoner seat the same way.
+tie-breaks. Cyborg uses only basic arithmetic, which IEEE-754 rounds the same way everywhere —
+**provided the compiler does not fuse `a + b * c` into one fused multiply-add**. ARM toolchains do by
+default, and Phase 3b's tournament pins moved on macOS/arm64 while Linux and Windows matched them,
+because §6 play breaks ties at the last bit. So the engine builds with `-ffp-contract=off` (GCC and
+Clang, private to the library), and with that Cyborg's fixtures and pins are portable — **do not gate
+them**. If one ever diverges on one platform, suspect contraction first: on an FMA-capable x86, a
+clang build with `-DCMAKE_CXX_FLAGS="-mfma -ffp-contract=on"` minus the engine's own flag reproduced
+the macOS numbers exactly. Use exact `==` where the design claims certainty (`0.0f`, `1.0f`) and
+`WithinAbs(…, 1e-5)` for estimates. **A table containing Reckoner is different**: gate any exact score
+involving a Reckoner seat the same way as Reckoner's own pin.
 
 **Integer-ness of a float sum.** §4.1 branches on "is `raw` an integer". Knob values like `0.60` are not
 binary-exact. Use `std::fabs(raw - std::round(raw)) < 1e-4f`, never `raw == std::floor(raw)`.
@@ -283,8 +288,9 @@ rule scoring about 0.31 per card at every table size against a fair share of `1/
 odds-priced rule, §4.5's branch became `g == 1`, and `useExpectedRemaining` was turned on — each
 candidate measured on seed ranges the diagnosis had not used. Result per game against heuristic
 bidding: +3.9, +5.7, +0.3, −3.3, −4.5 at 2–6 players. The gate still fails at 5–6, so
-`CyborgTournamentTests` **pins** the exact totals per table size instead of asserting a winner; Phase
-3's card play is expected to move them, and they are re-pinned deliberately when it does.
+`CyborgTournamentTests` **pins** the exact totals per table size instead of asserting a winner. Both of
+its arms set `useHeuristicPlay = true`, so card play does not move those totals; Phase 3b added separate
+real-play A/Bs (see §5).
 
 ---
 
@@ -358,12 +364,32 @@ Decision fixtures in the style of `tests/TrickHeuristicsTests.cpp`:
 - `holdThreshold`: TAKE with three seats to act and a cheap winner ducks; with one seat left it takes.
 - Mutation-check the asymmetry test and the §7.4 test: invert the rule in a scratch copy, confirm failure.
 
-**Also update the parity test's header comment** to say it now pins the fallback path. The test
-itself must keep passing unchanged. `fallbacksTaken == 0` in a healthy game still holds, and matters
-more now: with real play rules, a silently disagreeing memory would *hide* inside heuristic play.
+**When `useHeuristicPlay` flips, update the parity test's header comment** to say it pins the fallback
+path. The test itself must keep passing unchanged. `fallbacksTaken == 0` in a healthy game still holds,
+and matters more then: with real play rules, a silently disagreeing memory would *hide* inside heuristic
+play.
 
 Gate: the play fixtures pass, and a randomised sweep over many seeded games confirms every card Cyborg
 plays is legal and `fallbacksTaken == 0`.
+
+**What happened.** Phase 3 was split in two. **3a** (PR #22) landed `Plan` and `Play` behind
+`useHeuristicPlay = true`, with fixtures; its review made the cashing hint mean "the suit being cashed"
+and the DUCK tie-break trump-aware. **3b** added two real-play A/Bs to `CyborgTournamentTests` and
+measured before flipping the default — and §6 play **lost** to heuristic play at 3–6 players (+1.3,
+−4.7, −1.3, −5.9, −5.0 points a game at 2–6). By agreement the default stayed heuristic and 3b landed
+as measurement only.
+
+The loss is almost all in no-trump rounds. There every card is dealt, so `pLeadWins` is 0 for any card
+with a higher card still out, apart from the duck term, and an ablation put most of the loss on the SHED
+and BALANCE *leads*, which choose by that term. Heuristic play in no-trump rounds with §6 play elsewhere
+measured −0.4, −1.0, +0.8, +1.7, +1.1 (seeds 9000–9039). Two plan-level fixes were tried and failed —
+dropping the duck term from the plan, and counting the plan's winners with §4.5's rank-gap credits — so
+the fix belongs in the lead rules themselves. **Phase 3c** redesigns §6.1's SHED and BALANCE leads for
+no-trump rounds, and the pinned A/Bs will show the result.
+
+Bidding under §6 play (§4 against heuristic bidding): +15.0, +8.1, +1.5, −3.7, −6.1. The bidding
+re-calibration decision waits for 3c, since those numbers come from play known to under-take without
+trumps.
 
 ---
 
