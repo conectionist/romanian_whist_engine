@@ -1,6 +1,6 @@
 # AI strategies
 
-The engine ships five `IStrategy` implementations. This document covers what each one
+The engine ships six `IStrategy` implementations. This document covers what each one
 does, how they compare, and where they fall down. For the interface itself, see
 [README.md](README.md#supplying-moves--imoveprovider).
 
@@ -10,13 +10,15 @@ does, how they compare, and where they fall down. For the interface itself, see
 | [`FirstCardStrategy`](#firstcardstrategy) | `strategies/FirstCardStrategy.h` | 0, or 1 when 0 is barred | The first legal card in hand order |
 | [`DuckingStrategy`](#duckingstrategy) | `strategies/DuckingStrategy.h` | 0, come what may | Sheds its highest cards whenever they cannot win |
 | [`LowRiskStrategy`](#lowriskstrategy) | `strategies/LowRiskStrategy.h` | The tricks its hand will take anyway — usually 0 | Wins cheaply while it owes tricks, then ducks |
+| [`CyborgStrategy`](#cyborgstrategy) | `strategies/CyborgStrategy.h` | The count with the best expected score, from exact odds on every card | Keeps a plan of which cards win and which go, and re-plans every trick |
 | [`ReckonerStrategy`](#reckonerstrategy) | `strategies/ReckonerStrategy.h` | What its sampled deals say the hand will take | Searches imagined deals, and plays to hit its bid or break yours |
 
 The first four are the subject of most of this document: they are stateless, they decide
 from the context they are handed, and they are short enough to read in one sitting. The
-Reckoner is none of those things — it remembers the whole round, it searches, and it has to
-be **registered as an observer** to work at all. Its section is [below](#reckonerstrategy),
-and its design is documented separately in
+last two are none of those things. Both remember the whole round, and both have to be
+**registered as an observer** to work at all. Cyborg reasons by rule and exact arithmetic;
+the Reckoner searches. Their sections are [below](#cyborgstrategy), and each has its own
+design document: [romanian-whist-cyborg-ai.md](romanian-whist-cyborg-ai.md) and
 [romanian-whist-reckoner-ai.md](romanian-whist-reckoner-ai.md).
 
 ---
@@ -104,12 +106,81 @@ rest of the round.
 
 ---
 
+## CyborgStrategy
+
+The rule-based remembering player. Where the four above decide from the `PlayContext` in
+front of them, Cyborg keeps a record of the whole round — every card played and by whom,
+every bid, every void a seat has shown — and prices each card in its hand against the cards
+still live. It never samples or searches, so a decision costs about half a microsecond, and it
+is deterministic: two Cyborgs dealt the same game play it identically.
+
+**Bidding** depends on the round size:
+
+| Tricks in the round | How it bids |
+|---|---|
+| 1 | Bid 1 if the card wins more than 6 times in 13 — where the expected scores of bidding 1 and 0 cross. Seats in the middle also read the bids before them; the last seat bids 0 unless 0 is barred |
+| 2 | A table of hand shapes when leading; otherwise summed card values, rounded |
+| 3–7 | Each card's chance of winning, combined into the chance of each trick count, and the bid with the best expected score |
+| 8 (no trump) | Aces and unbroken runs from the top count in full; cards just below them count in part |
+
+Forehead and Hidden rounds bid 0 — the hand may not be read — and every bid steps off the
+barred value.
+
+**Playing** follows a plan made from the bid and remade every trick: which cards are meant to
+win and which are meant to go. The plan's mode decides the card —
+
+| Mode | When | Plays for |
+|---|---|---|
+| `DUCK` | the bid is met | never taking another trick |
+| `TAKE` | it owes every remaining trick, or is behind | winning what it can, as cheaply as it can |
+| `SHED` | the hand will take more than it bid | losing its surplus winners early |
+| `BALANCE` | on schedule | taking tricks in the order that keeps the bid reachable |
+
+Whenever its memory disagrees with the position it is handed, a decision falls back to
+`LowRiskStrategy`'s heuristics rather than to anything arbitrary. `getFallbacksTaken()` counts
+those, and in healthy play it stays at zero — the tests assert it.
+
+### It has to be registered as an observer, too
+
+The same requirement as the Reckoner's below, for the same reason, and the same answer:
+
+```cpp
+SeatSetup seat = makeCyborgSeat("Ana", engine);
+```
+
+No seed: there is nothing random in it. Both decisions throw `std::logic_error` if the strategy
+was never registered, and `start()` throws if its name matches no seat at the table.
+
+`cyborg::CyborgKnobs` holds the numbers behind the rules. They are development tuning, not a
+difficulty dial — Cyborg ships as one strength. The design document's §9 lists them.
+
+### How it scores
+
+From the tournament tests in `tests/CyborgTournamentTests.cpp`, which pin these standings
+(points a game, the Cyborg rotated through every seat):
+
+| Table | Cyborg | Others |
+|---|---|---|
+| 1 Cyborg, 3 LowRisk (80 games) | **75.3** | LowRisk 60.9 |
+| 1 Cyborg, 1 Reckoner `medium()`, 2 LowRisk (15 games) | 72.7 | Reckoner **87.5**, LowRisk 60.2 |
+
+Against LowRisk it is ahead at every table size — by 16.2, 10.9, 13.1 and 9.4 points a game
+at 2, 3, 5 and 6 players, and by 3.7 in the 8-1-8 structure (smaller samples). The Reckoner is
+stronger, and pays for it in search.
+
+Where it falls down is listed in the design document's §8. In short: it has no model of
+opponents; it treats their hands as independent draws; its odds say little in the no-trump
+rounds, where every card is dealt; and it does not solve the last few tricks exactly, which
+the design (§6.5) leaves for later.
+
+---
+
 ## ReckonerStrategy
 
-The strong one, and the only one built differently from the rest. Where the four above
-decide from the `PlayContext` in front of them, the Reckoner keeps a model of the whole
-round — every card played, who has shown void in which suit, what everyone bid — and
-searches over deals consistent with it before each decision.
+The strong one. Where the four stateless strategies decide from the `PlayContext` in front
+of them, the Reckoner keeps a model of the whole round — every card played, who has shown
+void in which suit, what everyone bid — and searches over deals consistent with it before
+each decision.
 
 Four presets, which differ only in the numbers behind them:
 

@@ -18,10 +18,10 @@ namespace romanian_whist
 
 // A rule-based AI that remembers the whole round and plays to its bid.
 //
-// See docs/romanian-whist-cyborg-ai.md for the design. Today it keeps the memory
-// and delegates both decisions to the shared TrickHeuristics, so it plays at
-// LowRiskStrategy's strength; the Cyborg rules for bidding and card play arrive
-// on top of this.
+// See docs/romanian-whist-cyborg-ai.md for the design. It bids by that
+// document's section 4 and plays by its sections 5 and 6. The shared
+// TrickHeuristics - LowRiskStrategy's rules - are its fallback, taken for any
+// decision where the memory disagrees with the position it is handed.
 //
 // LIKE ReckonerStrategy, THIS IS AN IStrategy *AND* AN IGameObserver, and it is
 // useless as the first until registered as the second - everything it decides

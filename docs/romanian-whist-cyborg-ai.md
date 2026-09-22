@@ -1,5 +1,13 @@
 # "Cyborg" — a half-point, hand-shape AI for Romanian Whist
 
+> **Status: shipped in engine 4.3.0 as `CyborgStrategy`.** Everything below describes what the code
+> does, except §6.5 (endgame enumeration), which is not implemented. Where building it proved a
+> section wrong, the section was rewritten and says what changed; the phases and the measurements
+> behind each change are in [cyborg-implementation-plan.md](cyborg-implementation-plan.md).
+> Measured at four players, one Cyborg scores 14.4 points a game more than three LowRisk and 14.7
+> fewer than a Reckoner `medium()`, at about half a microsecond a decision.
+> `tests/CyborgTournamentTests.cpp` pins both results.
+
 A rule-based strategy built on one idea: **split every suit down the middle**. The top half of the
 ranks are *big cards*, the bottom half are *small cards*, and almost every judgement the bot makes
 is a count of big cards, small cards and trumps, resolved with half-points.
@@ -154,8 +162,12 @@ for the rest of the round.
 | `onRoundStarted` | `initRound(N, R, mySeat, engine.getRoundLeaderSeat(), engine.getCurrentTrumpCard())` |
 | `onBetPlaced(seat, bet)` | record it; the running sum feeds §4.1 |
 | `onCardPlayed(seat, card)` | the update above |
-| `onTrickWon(winner, n)` | `won[winner]++`, clear the trick, **re-plan** (§5) |
-| `onRoundScored` | clear the plan; nothing carries across rounds |
+| `onTrickWon(winner, n)` | `won[winner]++`, clear the trick |
+
+No hook re-plans and none clears a plan: §5's plan is never stored. Each decision builds it afresh
+from the memory, which is what "re-plan every trick" amounts to. The two things play does carry
+across tricks — §6.1's cashing suit and the lead §4.3 planned at bid time — are both cleared by
+`onRoundStarted`.
 
 Cyborg keeps no cross-round opponent model. It is stateless between rounds by design — that is a
 large part of why it is testable.
@@ -844,6 +856,11 @@ decide anyway.
 
 ### 6.5 Endgame certainty
 
+> **Not implemented.** Deferred when the rest shipped: every other rule here costs well under a
+> microsecond, while this one plays out every remaining distribution of the unseen cards —
+> hundreds or thousands a decision. Adding it would need its own measurement, and a new budget for
+> the latency bound in `tests/CyborgTournamentTests.cpp`, which it would otherwise fail.
+
 When `|unseen| ≤ ENDGAME_CARDS` (default 8), stop estimating. Enumerate the ways the unseen cards
 can be distributed among the hands consistent with `handSize[]` and `voidMask[]`, play each
 candidate card against every distribution with everyone following §6.1–§6.3, and pick the card that
@@ -970,7 +987,7 @@ Written down so the test suite can aim at it.
 | Bid and play can disagree | §4.5 credits gap winners that §6.1 must then cash correctly | Test it directly: assert the eight-card lead order |
 | No tempo reasoning | It cannot plan to lose a trick in order to regain the lead later | The `BALANCE` alignment rule approximates it at one ply |
 | Side-suit aces score zero at two tricks | Correct on average, wrong when nobody is void | Accept; the round is worth ±2 |
-| `pLeadWins` is nearly blind without trumps | With every card dealt, it is 0 for any card with a higher card still out, apart from the duck term. As first written, the `BALANCE` lead and the `SHED` test read that term as strength and §6 play lost 1.3–5.9 points a game to heuristic play at 3–6 players | Without trumps, `BALANCE` leads as `TAKE` does and `SHED` counts only certainties (Phase 3c). Now level or ahead except about −1 at five players; other rules that rank uncertain no-trump cards by `pLeadWins` deserve the same suspicion |
+| `pLeadWins` is nearly blind without trumps | With every card dealt, it is 0 for any card with a higher card still out, apart from the duck term. As first written, the `BALANCE` lead and the `SHED` test read that term as strength and §6 play lost 1.3–5.9 points a game to heuristic play at 3–6 players | Without trumps, `BALANCE` leads as `TAKE` does and `SHED` counts only certainties (Phase 3c). Now level or ahead except about −0.5 at five players; other rules that rank uncertain no-trump cards by `pLeadWins` deserve the same suspicion |
 
 ### An observer removed mid-game is not detected at its cause
 
@@ -999,7 +1016,7 @@ than as a side effect of Cyborg.
 | `GAP_CREDIT_FOLLOWER` | 0.60 | Same, when not the round leader. |
 | `HOLD_THRESHOLD` | 0.50 | Minimum `pHolds()` before paying for a trick with players still to act. |
 | `SLACK` | 0.75 | Distance from plan before switching to `TAKE` or `SHED`. |
-| `ENDGAME_CARDS` | 8 | Unseen-card count at which §6.5 replaces estimation with enumeration. |
+| `ENDGAME_CARDS` | 8 | Unseen-card count at which §6.5 replaces estimation with enumeration. Not in `CyborgKnobs`, since §6.5 is not implemented. |
 | `USE_EXPECTED_REMAINING` | on | The §4.1 refinement. Measured as a net gain, so on by default. Applies to §4.3's non-leader rule and §4.5; §4.4 no longer rounds. |
 | `LENGTH_CREDIT` | off | The §4.5 refinement. |
 
@@ -1020,25 +1037,26 @@ coin-flip on the worst card in the deck, where the answer is obvious.
 
 ## 10. Implementation checklist
 
-Suggested layout, following the shape the reckoner already established:
+The layout as built, following the shape the reckoner already established:
 
 ```
-include/romanian_whist/strategies/CyborgStrategy.h        IStrategy + IGameObserver
+include/romanian_whist/strategies/CyborgStrategy.h        IStrategy + IGameObserver, makeCyborgSeat()
 include/romanian_whist/strategies/cyborg/CyborgKnobs.h    §9
 include/romanian_whist/strategies/cyborg/Halves.h         §1 — isBig / isSmall / categorise
 include/romanian_whist/strategies/cyborg/Odds.h           §3
 include/romanian_whist/strategies/cyborg/Bidding.h        §4
-include/romanian_whist/strategies/cyborg/PlayPlan.h       §5, §6
-src/strategies/cyborg/*.cpp
-tests/CyborgOddsTests.cpp  CyborgBiddingTests.cpp  CyborgStrategyTests.cpp  CyborgTournamentTests.cpp
+include/romanian_whist/strategies/cyborg/Plan.h           §5
+include/romanian_whist/strategies/cyborg/Play.h           §6
+src/strategies/CyborgStrategy.cpp  src/strategies/cyborg/*.cpp
+tests/CyborgHalvesTests.cpp  CyborgMemoryTests.cpp  CyborgOddsTests.cpp  CyborgBiddingTests.cpp
+      CyborgPlayTests.cpp  CyborgStrategyTests.cpp  CyborgRobustnessTests.cpp  CyborgTournamentTests.cpp
 ```
 
-Add the sources to the `romanian_whist_engine` target in `CMakeLists.txt` and the tests to
-`tests/CMakeLists.txt`. Provide a `makeCyborgSeat(name, engine, knobs)` free function that builds
-the strategy, stores its name and registers it as an observer before returning the `SeatSetup`,
-the way `makeReckonerSeat()` does (`src/strategies/ReckonerStrategy.cpp:304-312`) — a Cyborg that
-was never registered as an observer degrades to a bot that believes it is seat 0 in a four-player
-game, which is a bug that will not announce itself. See §2.4 for the four guards against it.
+`makeCyborgSeat(name, engine, knobs)` builds the strategy, stores its name and registers it as an
+observer before returning the `SeatSetup`, the way `makeReckonerSeat()` does. A Cyborg that was
+never registered would otherwise play as a bot that believes it is seat 0 in a four-player game —
+a bug that would not announce itself — so it refuses instead. `start()` throws if its name matches
+no seat (§2.4), and both decisions throw `std::logic_error` if it has never seen a round start (§8).
 
 Build order, each step testable on its own:
 
@@ -1051,13 +1069,19 @@ Build order, each step testable on its own:
 4. **§4 bidding**, one test per round size, using the worked examples in §7 as fixtures.
 5. **§5/§6 play**, asserting *decisions* rather than scores: given this memory and this hand, this
    card. Reuse the fixture style of `tests/TrickHeuristicsTests.cpp`.
-6. **Tournaments** against `LowRisk`, `Ducking` and `Reckoner`, at every player count and both
+6. **Tournaments** against `LowRisk` and `Reckoner`, at every player count and both
    [round structures](RULES.md#3-round-structure). `tests/ReckonerTournamentTests.cpp` is the
-   template; a fixed seed makes the result a regression test rather than a coin flip.
+   template; a fixed seed makes the result a regression test rather than a coin flip. (`Ducking`
+   was on this list. The full matrix is about 450 games and would dominate the suite, so it was cut
+   to `LowRisk` — the stronger baseline — and `Reckoner`.)
 
 The bar to clear: Cyborg should beat `LowRiskStrategy` comfortably and lose to `ReckonerStrategy`
 narrowly. If it beats Reckoner, one of them has a bug — most likely Cyborg reading state it should
 not have (`context.hand` in a Forehead round, §4.7) or Reckoner's rollouts being mis-seeded.
+
+**As shipped** it cleared the first half and lost to Reckoner by more than "narrowly": at four
+players Reckoner `medium()` 87.5, Cyborg 72.7, LowRisk 60.2 points a game. The tournament tests
+assert that order, and a margin of 7 points over LowRisk where 14.4 was measured.
 
 ---
 

@@ -89,10 +89,10 @@ Releases are tagged, so pin one rather than tracking a branch:
 ```bash
 cd libs/RomanianWhistEngine
 git fetch --tags
-git checkout v4.2.0
+git checkout v4.3.0
 cd ../..
 git add libs/RomanianWhistEngine
-git commit -m "Update Romanian Whist engine to 4.2.0"
+git commit -m "Update Romanian Whist engine to 4.3.0"
 ```
 
 `git pull origin master` also works if you would rather track the tip. Either way, read
@@ -706,35 +706,40 @@ whatever you set up before the call, because nothing else will.
 | `FirstCardStrategy` | Plays the first legal card; bids 0, or 1 when 0 is barred |
 | `LowRiskStrategy` | Bids the tricks its hand will take whether it wants them or not — usually 0 — then plays to that bid: takes tricks as cheaply as it can while it still owes some, and ducks every trick after that |
 | `DuckingStrategy` | Bids 0 come what may and never chases a trick, dumping its highest cards at the moments they cannot win |
+| `CyborgStrategy` | Counts every card played and prices each one exactly, then bids for the best expected score and plays to hit that bid. Rule-based and deterministic, with one strength; about half a microsecond a decision. **Needs registering as an observer — see below.** |
 | `ReckonerStrategy` | Counts every card played and searches imagined deals before each decision. Four presets, from a memoryless `Easy` to a `Brutal` that solves the endgame exactly. **Needs registering as an observer — see below.** |
 
 The two low-risk strategies share their judgement calls through
 `<romanian_whist/strategies/TrickHeuristics.h>`, which is public — reuse it rather than
 re-deriving "is this card safe to play?" for your own strategy.
 
-### ReckonerStrategy is also an observer
+### CyborgStrategy and ReckonerStrategy are also observers
 
-It is the one strategy here that cannot be built and handed over on its own. Everything it
-plays from — who has shown void in what, which cards are gone, what everyone bid — arrives
-through `IGameObserver`, so it has to be registered with the engine **before** `start()`,
-which is where it also resolves its own seat from its name.
+They are the two strategies here that cannot be built and handed over on their own.
+Everything they play from — who has shown void in what, which cards are gone, what everyone
+bid — arrives through `IGameObserver`, so each has to be registered with the engine
+**before** `start()`, which is where it also resolves its own seat from its name.
 
-Use the factory, which does all of that:
+Use the factories, which do all of that:
 
 ```cpp
 GameEngine engine;
 GameSetup setup;
 
-setup.seats.push_back(makeReckonerSeat("Ana", engine, reckoner::ReckonerKnobs::hard()));
+setup.seats.push_back(makeCyborgSeat("Ana", engine));
+setup.seats.push_back(makeReckonerSeat("Bogdan", engine, reckoner::ReckonerKnobs::hard()));
 // ...other seats...
 
-engine.start(std::move(setup));   // AFTER the seat was built against this engine
+engine.start(std::move(setup));   // AFTER the seats were built against this engine
 ```
 
 Constructing one directly and skipping `addObserver()` is a mistake the type system cannot
-catch, so the strategy catches it instead: both decisions throw `std::logic_error` if they
-are reached before the strategy ever saw a round start. Presets are
-`ReckonerKnobs::easy() / medium() / hard() / brutal()`, and
+catch, so the strategies catch it instead: both decisions throw `std::logic_error` if they
+are reached before the strategy ever saw a round start.
+
+`CyborgStrategy` has no presets and no randomness, so it takes no seed and two of them play
+the same game identically; its design is in `docs/romanian-whist-cyborg-ai.md`. Reckoner's
+presets are `ReckonerKnobs::easy() / medium() / hard() / brutal()`, and
 `docs/romanian-whist-reckoner-ai.md` documents every knob behind them.
 
 Write your own by implementing `IStrategy` from
@@ -774,8 +779,9 @@ include/romanian_whist/     public headers — this is the include root
 ├── Deck.h                  composition and the seeded shuffle
 ├── CardValidator.h         legal-move rules and the trick ranking
 ├── AiMoveProvider.h        AI player driven by an IStrategy
-├── strategies/             IStrategy + the five bundled strategies
+├── strategies/             IStrategy + the six bundled strategies
 │   ├── common/             shared across strategies: round memory, card bitmasks
+│   ├── cyborg/             CyborgStrategy's internals: odds, bidding, plan, play, knobs
 │   └── reckoner/           ReckonerStrategy's internals: sampler, rollout, evaluator,
 │                           and the guessing half of its tracker
 └── detail/                 internal; not part of the public contract
