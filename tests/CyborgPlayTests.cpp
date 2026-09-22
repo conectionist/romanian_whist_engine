@@ -405,13 +405,14 @@ TEST_CASE("Cyborg play: feasibility measures the distance from taking exactly n"
     REQUIRE(feasibility(junkMask, 1, ctx) == 0.0f);
 }
 
-TEST_CASE("Cyborg play: with trumps the BALANCE lead cashes or coasts on whether its winners are certain",
+TEST_CASE("Cyborg play: with trumps the BALANCE lead coasts unless a plain winner risks a ruff",
           "[cyborg]")
 {
-    // §6.1's BALANCE lead in a trump round. Every plan here comes out of
-    // buildPlan rather than being assembled by hand, because the arm's branches
-    // turn on `expected` - a field a hand-built Plan leaves at zero. The no-trump
-    // lead is a different rule, pinned in the next test case.
+    // §6.1's BALANCE lead in a trump round: cash a plain winner while trumps are
+    // still out, and otherwise lead the safest loser - whether the winners are
+    // certain or merely likely. Every plan here comes out of buildPlan, so the
+    // mode is the real one. The no-trump lead is a different rule, pinned in the
+    // next test case.
     const CyborgKnobs knobs{};
 
     const Card AceSpades{Rank::Ace, Suit::Spades};
@@ -438,10 +439,11 @@ TEST_CASE("Cyborg play: with trumps the BALANCE lead cashes or coasts on whether
         REQUIRE(choosePlay(leading(hand, spadesTurnUp), plan, ctx, knobs) == SevenHearts);
     }
 
-    SECTION("a winner that is merely likely gets cashed while it is still worth something")
+    SECTION("a winner that is merely likely is kept too")
     {
-        // The queen of trumps is the plan's winner but the king may yet beat it,
-        // so the bid is not paid for. Lead it now rather than watch it shrink.
+        // The queen of trumps is the plan's winner but the king may yet beat it.
+        // An earlier rule cashed it now; measured in Phase 4, coasting on the
+        // loser does better at every table size, so the seven goes.
         const std::vector<Card> hand{QueenSpades, SevenHearts, EightHearts};
 
         const OddsContext ctx = makeContext(4,
@@ -454,7 +456,7 @@ TEST_CASE("Cyborg play: with trumps the BALANCE lead cashes or coasts on whether
         REQUIRE(plan.mode == Mode::Balance);
         REQUIRE(plan.expected < 1.0f); // likely, not certain
 
-        REQUIRE(choosePlay(leading(hand, spadesTurnUp), plan, ctx, knobs) == QueenSpades);
+        REQUIRE(choosePlay(leading(hand, spadesTurnUp), plan, ctx, knobs) == SevenHearts);
     }
 
     SECTION("a plain winner is cashed ahead of a trump one while trumps are live")

@@ -722,8 +722,8 @@ lead():
             lead exactly as TAKE does                   // cash the certainties while on lead
         elif my winners are non-trump and trumps are still live:
             cash the best winner now — it is only getting more ruffable
-        elif every winner is a certainty: lead the safest loser   // the bid is already paid for
-        else:                             lead argmax pLeadWins among `winners`
+        else:
+            lead the safest loser                       // keep the winners for the tricks that need them
 ```
 
 The three paragraphs below are the *reasoning* behind the branches above, not corrections to them —
@@ -764,19 +764,16 @@ rule exists to protect: §7.3 inverted.
 table is exactly what the "no aces" paragraph below says not to do, so the branch above reads "the
 lowest card of my longest suit" where an earlier draft said `argmax pLeadWins`.
 
-Two edges the pseudocode leaves open, settled in the implementation: when every legal card is a sure
-winner, `SHED` has nothing to shed and spends the cheapest of them instead of the dearest; and
-`BALANCE` counts itself ahead of plan when **every winner it is counting on is a certainty**, which is
-when it leads a loser rather than cashing.
+One edge the pseudocode leaves open, settled in the implementation: when every legal card is a sure
+winner, `SHED` has nothing to shed and spends the cheapest of them instead of the dearest.
 
-**That test is an equality, not an inequality.** `expected` is the sum of the `need` best `pLeadWins`
-scores and `pLeadWins` is capped at 1, so `expected` can never *exceed* `need`: written `expected >=
-need` it reads like a margin, but the only way to satisfy it is for every one of those cards to have
-returned exactly `1.0` from one of §3.2's certainty early-outs. A hand holding one certainty and one
-near-certainty is *not* ahead of plan and cashes instead. The code says this with a named
-`winnersAreCertain()` rather than leaving the reader to work out that the inequality is unreachable.
-Whether a slack-based threshold (`expected >= need - slack`, mirroring the behind-plan test in §5)
-plays better is a Phase 4 measurement, not an assumption to bake in here.
+**A trump-round `BALANCE` lead does not cash a winner it merely expects.** As first implemented it
+cashed the dearest winner unless every winner was certain. Phase 4 measured the alternative — "ahead
+of plan" when `expected >= need − slack`, mirroring §5's behind-plan test — and it won against LowRisk
+at every table size (+0.1 to +1.0 points a game, 300 seeds), with all-Cyborg tables unchanged. But §5
+only enters `BALANCE` when `expected >= need − slack`, below which it is `TAKE`, so that test is always
+true here: adopting it meant deleting the cashing branch, not adding a condition that cannot fail.
+What remains is the ruff rule above and the safest loser.
 
 **No aces, and needing tricks.** Do not lead a big card into an unknown table — whoever holds the
 card above it simply takes it, and you have spent your best card for nothing. Lead your *lowest*
