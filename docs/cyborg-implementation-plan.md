@@ -19,11 +19,15 @@ the design document in the same PR — Phases 0 and 1 each found real errors in 
 | 2 | Bidding (design §4) | ✅ merged, PR #21 (`e9f9eeb`) — §4.4 and §4.5 revised, A/B pinned per table size, see §4 "Gate" |
 | 3 | The plan and card play (§5, §6.1–§6.4) | ✅ merged — 3a PR #22 (`f634301`), 3b PR #23 (`c488cb3`, measurement only), 3c PR #24 (`ff19b42`, §6 play the default) |
 | — | Bidding re-calibration: §4.4 bids by expected score | ✅ merged, PR #25 (`b80123c`) — see the end of §5 |
-| 4 | Tournament bar, refinements, documentation, release | in progress — 4a (refinements + tournament bar) in review, then 4b (docs + release 4.3.0) |
+| 4 | Tournament bar, refinements, documentation, release | ✅ 4a merged, PR #26 (`8cda385`) — one refinement adopted, the bar pinned; 4b documents it and releases **4.3.0** |
 
-Baseline: **148 test cases** after Phase 1; **185 on GCC Release and Debug, 184 on clang** after the
-bidding re-calibration (one Reckoner test is compiled on Linux/GCC only — see §3). CI green on Linux,
-macOS and Windows.
+**Cyborg is complete** and ships in engine 4.3.0. This file is now the record of how it was built;
+§7 lists what was carried forward, and the design document's §6.5 (endgame enumeration) is the one
+part of the design left unimplemented.
+
+Baseline: **148 test cases** after Phase 1; **188 on GCC Release and Debug, 187 on clang** after
+Phase 4a (one Reckoner test is compiled on Linux/GCC only — see §3). CI green on Linux, macOS and
+Windows.
 
 ### What Phase 1 built — the pieces later phases plug into
 
@@ -478,10 +482,14 @@ Reckoner's entries (added in 4.2.0) are the template:
   it; update the strategy count in its opening line.
 - The design document: remove or correct anything the implementation proved wrong.
 
+Done in 4b: the README's strategy table and observer section, a `CyborgStrategy` section in
+`docs/STRATEGIES.md`, and a final pass over the design document — a status note, §6.5 marked not
+implemented, §2.4's hooks and §10's layout corrected to what was built, and the bar's result.
+
 ### Release
 
 Version bump in `CMakeLists.txt` and a `CHANGELOG.md` entry. This is where Cyborg becomes a documented
-strategy, the way 4.2.0 did it for Reckoner — likely a minor version bump.
+strategy, the way 4.2.0 did it for Reckoner — a minor version bump, **4.3.0**, done in 4b.
 
 ---
 

@@ -3,6 +3,48 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
+## 4.3.0
+
+**A sixth strategy: `CyborgStrategy`.** A rule-based opponent that remembers the whole round and
+prices every card in its hand exactly, then bids for the best expected score and plays to hit that
+bid. It sits between the two strategies it was built to be measured against. At four players it
+scores 14.4 points a game more than `LowRiskStrategy` and 14.7 fewer than the Reckoner's `medium()`
+preset, and it is ahead of LowRisk at every table size. A decision takes about half a microsecond,
+and it is deterministic, with no presets and no seed. The design is in
+[docs/romanian-whist-cyborg-ai.md](docs/romanian-whist-cyborg-ai.md), and
+[docs/STRATEGIES.md](docs/STRATEGIES.md) has a section on it.
+
+Like the Reckoner, it is an `IStrategy` **and** an `IGameObserver`, so it must be registered before
+`start()`. `makeCyborgSeat()` does that for you. It has the guards 4.2.0 gave the Reckoner, plus
+one more: `start()` throws if its name matches no seat at the table.
+
+Additive: no signature changed, and no existing strategy's rules changed. One build change can
+move floating-point results on some platforms; see **Changed**.
+
+### Added
+
+- `CyborgStrategy` and `makeCyborgSeat()`, in `strategies/CyborgStrategy.h`, with its parts under
+  `strategies/cyborg/`: the odds kit, bidding, the plan, card play, and `CyborgKnobs`. The knobs are
+  development tuning, not a difficulty dial.
+- `strategies/common/`: `RoundMemory`, `CardMask` and `hyper0`, the card counting both remembering
+  strategies share. They were extracted from the Reckoner, whose old `reckoner::` spellings still
+  work. `ReckonerTracker` now derives from `common::RoundMemory`, and every member it had is still
+  reachable through it.
+- `heuristics::safeCards()` and `heuristics::winningCards()` in `TrickHeuristics.h`: the split of a
+  legal list on the card currently winning the trick.
+- Tests: the Cyborg suites (`tests/Cyborg*Tests.cpp`), including a tournament bar that asserts
+  standings rather than exact totals, and a parity test that pins Cyborg's fallback to
+  `LowRiskStrategy`'s play card for card.
+
+### Changed
+
+- **The engine builds with `-ffp-contract=off` on GCC and Clang.** On macOS/arm64 the compiler
+  fused multiply-adds, which changed the last bit of some probabilities, flipped Cyborg's
+  tie-breaks and gave different games from Linux. Contraction is now off for the engine target
+  (`PRIVATE`, so your own code's flags are untouched), making results match across platforms.
+  If you relied on the old contraction — for instance, pinned a Reckoner score on arm64 — expect
+  last-bit floating-point differences.
+
 ## 4.2.0
 
 **A fifth strategy that counts cards, and the guard rails it needed.** `ReckonerStrategy` landed
