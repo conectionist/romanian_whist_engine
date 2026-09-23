@@ -115,7 +115,9 @@ const Round &Scoreboard::getRound(unsigned int index) const
 
 unsigned int Scoreboard::getRoundCount() const
 {
-    return rounds.size();
+    // A schedule is at most a few dozen rounds, so the narrowing is safe; it is
+    // spelled out because size() is a size_t and MSVC says so at /W4.
+    return static_cast<unsigned int>(rounds.size());
 }
 
 unsigned int Scoreboard::getCurrentRoundIndex() const

@@ -466,7 +466,11 @@ unsigned int GameEngine::getBiddingOrder(Seat seat) const
 {
     requireStarted();
 
-    const unsigned int playerCount = players.size();
+    // The cast is explicit because MSVC is right to ask: size() is a size_t.
+    // start() accepts 2 to 6 seats and nothing else, so the value always fits -
+    // and seats are unsigned int throughout the public API, which is the type
+    // this has to end up as anyway.
+    const auto playerCount = static_cast<unsigned int>(players.size());
 
     if(seat.index >= playerCount)
         throw std::out_of_range("GameEngine::getBiddingOrder: seat out of range");
@@ -483,7 +487,7 @@ Seat GameEngine::getNextSeat(Seat seat) const
 
 unsigned int GameEngine::getPlayerCount() const
 {
-    return players.size();
+    return static_cast<unsigned int>(players.size());
 }
 
 std::optional<unsigned int> GameEngine::getForbiddenBet() const
@@ -804,7 +808,7 @@ bool GameEngine::canSeeHand(Seat viewer, Seat holder) const
     // Checked here rather than left to yield a confident answer about a seat
     // that does not exist, which is how every other seat-taking accessor on
     // this class behaves.
-    const unsigned int playerCount = players.size();
+    const auto playerCount = static_cast<unsigned int>(players.size());
 
     if(viewer.index >= playerCount || holder.index >= playerCount)
         throw std::out_of_range("GameEngine::canSeeHand: seat out of range");
