@@ -9,47 +9,51 @@ on:
       - '**/*.md'
 
 jobs:
-  build-linux:
-    name: Build (Linux)
-    runs-on: ubuntu-latest
+  build:
+    # One body, one cell per configuration. The three platforms were three
+    # byte-identical jobs, so every flag had to be added three times and the
+    # obvious failure was missing one of the copies.
+    #
+    # Linux is also built in Debug, because a warning set is not one thing at
+    # every optimization level: -Wmaybe-uninitialized needs -O2 to fire at all,
+    # and other warnings appear only without it. Release alone therefore leaves a
+    # class of them unguarded - and README tells contributors to build the Debug
+    # preset, which nothing else checks. Debug is deliberately NOT repeated on
+    # macOS and Windows: the asymmetry that matters is the optimization level,
+    # not the platform, and three more cells would roughly double CI for the
+    # least likely payoff.
+    #
+    # fail-fast is off so that one platform failing still reports the others -
+    # "does this fail everywhere or only on MSVC?" is the first question every
+    # time, and cancelling the rest throws that answer away.
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux
+            os: ubuntu-latest
+            preset: release
+          - label: Windows
+            os: windows-latest
+            preset: release
+          - label: macOS
+            os: macos-latest
+            preset: release
+          - label: Linux Debug
+            os: ubuntu-latest
+            preset: default
+
     steps:
       - uses: actions/checkout@v7
 
       - name: Configure
-        run: cmake --preset release -DWHIST_WARNINGS_AS_ERRORS=ON
+        run: cmake --preset ${{ matrix.preset }} -DWHIST_WARNINGS_AS_ERRORS=ON
 
       - name: Build
-        run: cmake --build --preset release
+        run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Test
-        run: ctest --preset release --output-on-failure --no-tests=error
-
-  build-windows:
-    name: Build (Windows)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Configure
-        run: cmake --preset release -DWHIST_WARNINGS_AS_ERRORS=ON
-
-      - name: Build
-        run: cmake --build --preset release
-
-      - name: Test
-        run: ctest --preset release --output-on-failure --no-tests=error
-
-  build-macos:
-    name: Build (macOS)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Configure
-        run: cmake --preset release -DWHIST_WARNINGS_AS_ERRORS=ON
-
-      - name: Build
-        run: cmake --build --preset release
-
-      - name: Test
-        run: ctest --preset release --output-on-failure --no-tests=error
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure --no-tests=error
