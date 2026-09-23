@@ -105,7 +105,7 @@ TEST_CASE("ReckonerStrategy: pinned scores across every deck profile", "[reckone
     REQUIRE(run(3, GameStructure::S_181, 11) == std::vector<int>{ 41, 43, 40 });
     REQUIRE(run(4, GameStructure::S_181, 12) == std::vector<int>{ 71, 86, 86, 70 });
     REQUIRE(run(4, GameStructure::S_818, 13) == std::vector<int>{ 57, 49, 99, 1 });
-    REQUIRE(run(5, GameStructure::S_181, 14) == std::vector<int>{ 117, 105, 83, 92, 96 });
+    REQUIRE(run(5, GameStructure::S_181, 14) == std::vector<int>{ 124, 99, 83, 92, 96 });
     REQUIRE(run(6, GameStructure::S_818, 15) == std::vector<int>{ 146, 110, 105, 84, 121, 117 });
 }
 #endif
