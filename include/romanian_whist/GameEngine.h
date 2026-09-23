@@ -145,7 +145,7 @@ private:
         bool wasDispatching;
 
     public:
-        explicit DispatchGuard(GameEngine& engine);
+        explicit DispatchGuard(GameEngine& owner);
         ~DispatchGuard();
 
         DispatchGuard(const DispatchGuard&) = delete;
@@ -167,7 +167,7 @@ private:
         GameEngine& engine;
 
     public:
-        explicit DrivingGuard(GameEngine& engine);
+        explicit DrivingGuard(GameEngine& owner);
         ~DrivingGuard();
 
         DrivingGuard(const DrivingGuard&) = delete;

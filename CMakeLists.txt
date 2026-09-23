@@ -55,6 +55,37 @@ target_compile_features(romanian_whist_engine PUBLIC cxx_std_20)
 target_compile_options(romanian_whist_engine PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-ffp-contract=off>)
 
+# WARNINGS. Applied per target and PRIVATE, like the flag above, so a consumer
+# building this as a submodule keeps whatever its own build chose.
+#
+# -Wshadow is not decoration: the rest of the set is what any project turns on,
+# and -Wall is what makes -Wswitch speak - which src/strategies/cyborg/Play.cpp
+# deliberately depends on, having no `default:` in its mode switches so that an
+# unhandled mode is named rather than silently taking a neighbour's arm.
+#
+# Errors are opt-in rather than always on, because three compilers and their
+# future versions do not warn about the same things and a consumer should not
+# have their build broken by ours. CI configures with -DWHIST_WARNINGS_AS_ERRORS=ON,
+# which is what stops a new warning reaching master.
+#
+# The semicolons inside the generator expressions are load-bearing: spaces there
+# would be passed to the compiler as one unparsable argument.
+option(WHIST_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+
+function(whist_enable_warnings target)
+    target_compile_options(${target} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wshadow;-Wpedantic;-Wnon-virtual-dtor;-Woverloaded-virtual>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>)
+
+    if(WHIST_WARNINGS_AS_ERRORS)
+        target_compile_options(${target} PRIVATE
+            $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Werror>
+            $<$<CXX_COMPILER_ID:MSVC>:/WX>)
+    endif()
+endfunction()
+
+whist_enable_warnings(romanian_whist_engine)
+
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/romanian_whist/Version.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/include/romanian_whist/Version.h

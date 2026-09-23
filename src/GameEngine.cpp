@@ -827,7 +827,7 @@ bool GameEngine::cardBeats(const Card& candidate, const Card& currentBest, Suit 
     return CardValidator::beats(candidate, currentBest, leadSuit, getCurrentTrumpCard());
 }
 
-GameEngine::DrivingGuard::DrivingGuard(GameEngine& engine) : engine(engine)
+GameEngine::DrivingGuard::DrivingGuard(GameEngine& owner) : engine(owner)
 {
     engine.driving = true;
 }
@@ -856,8 +856,8 @@ void GameEngine::requireNotDriving(const char* caller) const
 // iteration, which is why addObserver()/removeObserver() forbid it - and why
 // each one raises the flag those two check.
 
-GameEngine::DispatchGuard::DispatchGuard(GameEngine& engine)
-    : engine(engine), wasDispatching(engine.dispatching)
+GameEngine::DispatchGuard::DispatchGuard(GameEngine& owner)
+    : engine(owner), wasDispatching(owner.dispatching)
 {
     engine.dispatching = true;
 }

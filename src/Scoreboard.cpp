@@ -125,7 +125,7 @@ unsigned int Scoreboard::getCurrentRoundIndex() const
 
 void Scoreboard::calculateScores(PlayerList& players)
 {
-    Round& currentRound = getCurrentRound();
+    Round& round = getCurrentRound();
 
     // Collect every bid before crediting anybody. Scoring only ever runs once
     // betting is complete, so a seat with no bid means the loop skipped a
@@ -142,7 +142,7 @@ void Scoreboard::calculateScores(PlayerList& players)
 
     for(unsigned int i = 0 ; i < players.size() ; i++)
     {
-        const std::optional<unsigned int> bid = currentRound.getBet(Seat{i});
+        const std::optional<unsigned int> bid = round.getBet(Seat{i});
 
         if(!bid)
             throw std::logic_error("Scoreboard::calculateScores: seat has not bid");
@@ -156,13 +156,13 @@ void Scoreboard::calculateScores(PlayerList& players)
         Player& player = players.at(seat.index);
 
         const unsigned int bid = bids[i];
-        const unsigned int actual = currentRound.getTricksWon(seat);
+        const unsigned int actual = round.getTricksWon(seat);
 
         int roundScore = calculateRoundScore(bid, actual);
         player.addToScore(roundScore);
         
         // Update streak counters
-        if(shouldCountForStreaks(currentRound))
+        if(shouldCountForStreaks(round))
         {
             if(bid == actual)
             {
