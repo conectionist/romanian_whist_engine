@@ -428,8 +428,15 @@ CardId BasePolicy::chooseCard(Mask hand,
     // though every read is under its own guard, and the five that do not warn
     // were left alone because rewriting them risks moving Reckoner's play for no
     // gain. `trumpIdx` is read only where `hasTrump` is true.
+    // The no-trump value indexes nothing, deliberately. 0 would be hearts, so a
+    // read that ever escaped its `hasTrump` guard would quietly treat a real
+    // suit as trump; ~0u makes the same slip fail loudly, which is the one
+    // property the optional was still buying us here.
+    constexpr unsigned int NoTrumpSuit = ~0u;
+
     const bool hasTrump = ctx.trumpSuit.has_value();
-    const unsigned int trumpIdx = hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : 0u;
+    const unsigned int trumpIdx =
+        hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : NoTrumpSuit;
 
     if(!isFollowing)
     {

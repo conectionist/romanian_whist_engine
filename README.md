@@ -126,6 +126,26 @@ game; `tests/CMakeLists.txt` has the measurements. Nothing else in the suite is 
 through `add_subdirectory` builds **neither** the tests nor Catch2. You pay for them only when
 you are working on the engine itself.
 
+### Build options
+
+| Option | Default | What it does |
+|---|---|---|
+| `WHIST_BUILD_TESTS` | `PROJECT_IS_TOP_LEVEL` | Builds the Catch2 suite, and fetches Catch2 |
+| `WHIST_ENABLE_WARNINGS` | `PROJECT_IS_TOP_LEVEL` | `-Wall -Wextra -Wshadow -Wpedantic -Wnon-virtual-dtor -Woverloaded-virtual`, or `/W4` on MSVC |
+| `WHIST_WARNINGS_AS_ERRORS` | `OFF` | Adds `-Werror`, or `/WX` on MSVC |
+
+Both warning options are off for a consumer by design. Compile options are *appended* to the ones
+your own build already sets, so if ours were always on, your global `-Werror` would apply to our
+`-Wextra` on our sources — and the next compiler release that adds a warning would break your
+build on our code. Turn them on deliberately with `-DWHIST_ENABLE_WARNINGS=ON` if you want them.
+
+To build the way CI does:
+
+```bash
+cmake --preset release -DWHIST_WARNINGS_AS_ERRORS=ON
+cmake --build --preset release
+```
+
 ---
 
 ## Quick start
@@ -389,9 +409,9 @@ position. `ConsoleMoveProvider` in the terminal client is the worked example.
 struct BetContext
 {
     const std::vector<Card>& hand;               // size == the round's trick count
-    std::optional<Card> trump;                   // empty in 8-card rounds
+    std::optional<Card> trump{};                 // empty in 8-card rounds
     bool isFirstPlayer = false;                  // opens the bidding
-    std::optional<unsigned int> forbiddenBet;    // see below
+    std::optional<unsigned int> forbiddenBet{};  // see below
     RoundType roundType = RoundType::Normal;     // Normal / Forehead / Hidden
 };
 ```
@@ -403,8 +423,8 @@ struct PlayContext
 {
     const std::vector<Card>& hand;
     const std::vector<Card>& playedCards;        // this trick, in play order
-    std::optional<Card> trump;                   // empty in 8-card rounds
-    std::optional<Suit> leadSuit;                // empty when leading
+    std::optional<Card> trump{};                 // empty in 8-card rounds
+    std::optional<Suit> leadSuit{};              // empty when leading
     unsigned int bet = 0;                        // this player's bid this round
     unsigned int tricksWon = 0;                  // of it, so far
 };

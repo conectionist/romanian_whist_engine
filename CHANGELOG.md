@@ -3,6 +3,32 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
+## Unreleased
+
+**The engine builds with warnings on, and CI treats them as errors.** Nothing here changes what the
+engine does; it changes what its own build refuses to let through.
+
+### Added
+
+- `WHIST_ENABLE_WARNINGS` (default `PROJECT_IS_TOP_LEVEL`) builds with `-Wall -Wextra -Wshadow
+  -Wpedantic -Wnon-virtual-dtor -Woverloaded-virtual`, or `/W4` on MSVC.
+- `WHIST_WARNINGS_AS_ERRORS` (default `OFF`) adds `-Werror` / `/WX`. CI configures with it on.
+
+  Both default to leaving a consumer's build alone. Compile options are appended to the ones your
+  build already sets, so warnings that are always on would put our sources under your `-Werror` —
+  and a future compiler release adding a warning would then break your build on our code. Turn them
+  on deliberately if you want them.
+
+### Fixed
+
+- **`ReckonerStrategy` did 200 rollouts per one-trick bid and discarded every result.** The bid came
+  from a separate calculation below it. No bid changes; the work was simply thrown away.
+- `BetContext` and `PlayContext` give their `std::optional` members default initializers, so
+  `BetContext{hand}` and `PlayContext{hand, played}` no longer warn under
+  `-Wmissing-field-initializers` in a consumer's build.
+- Four `size_t` to `unsigned int` narrowings in `GameEngine` and `Scoreboard` are now explicit, and
+  a handful of shadowed locals and unused parameters are gone.
+
 ## 4.3.0
 
 **A sixth strategy: `CyborgStrategy`.** A rule-based opponent that remembers the whole round and

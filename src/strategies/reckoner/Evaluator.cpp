@@ -28,13 +28,17 @@ float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx)
     // A plain index and a flag rather than an optional, deliberately: GCC cannot
     // follow that the optional's payload is only read under its own guard and
     // calls it maybe-uninitialized in optimized builds. `trumpSuitIdx` is read
-    // only where `hasTrump` is true; the 0 is never used as a suit.
+    // only where `hasTrump` is true, and the no-trump value indexes nothing on
+    // purpose - see the note in BasePolicy::chooseCard.
     //
     // The same idiom is still written as an optional elsewhere in this file's
-    // neighbours - see the note in BasePolicy.cpp. Only the two that warned were
-    // changed, because every rewrite here is a chance to move Reckoner's play.
+    // neighbours. Only the two that warned were changed, because every rewrite
+    // here is a chance to move Reckoner's play.
+    constexpr unsigned int NoTrumpSuit = ~0u;
+
     const bool hasTrump = ctx.trumpSuit.has_value();
-    const unsigned int trumpSuitIdx = hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : 0u;
+    const unsigned int trumpSuitIdx =
+        hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : NoTrumpSuit;
 
     const unsigned int nT = hasTrump ? popcount(U & maskSuit(trumpSuitIdx, profile)) : 0;
 
