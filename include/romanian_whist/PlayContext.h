@@ -21,11 +21,14 @@ struct PlayContext
     // player is leading.
     const std::vector<Card>& playedCards;
 
-    // Empty in 8-card rounds, which have no trump.
-    std::optional<Card> trump;
+    // Empty in 8-card rounds, which have no trump. Initialised here for the
+    // reason BetContext's members are: without it, a caller writing
+    // `PlayContext{hand, played}` gets a -Wmissing-field-initializers warning in
+    // their own build, which is not theirs to fix.
+    std::optional<Card> trump{};
 
     // Empty when this player is leading the trick, and so is the one setting it.
-    std::optional<Suit> leadSuit;
+    std::optional<Suit> leadSuit{};
 
     // What this player bid for the round, and how many tricks they have taken
     // of it so far, so a strategy can tell whether it still owes tricks.

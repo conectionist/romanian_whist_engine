@@ -25,10 +25,22 @@ float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx)
     const float qProb = (n > 0) ? std::min(1.0f, static_cast<float>(others) / static_cast<float>(n)) : 0.0f;
     float E = 0.0f;
 
-    const std::optional<unsigned int> trumpSuitIdx =
-        ctx.trumpSuit ? std::optional<unsigned int>(static_cast<unsigned int>(*ctx.trumpSuit)) : std::nullopt;
+    // A plain index and a flag rather than an optional, deliberately: GCC cannot
+    // follow that the optional's payload is only read under its own guard and
+    // calls it maybe-uninitialized in optimized builds. `trumpSuitIdx` is read
+    // only where `hasTrump` is true, and the no-trump value indexes nothing on
+    // purpose - see the note in BasePolicy::chooseCard.
+    //
+    // The same idiom is still written as an optional elsewhere in this file's
+    // neighbours. Only the two that warned were changed, because every rewrite
+    // here is a chance to move Reckoner's play.
+    constexpr unsigned int NoTrumpSuit = ~0u;
 
-    const unsigned int nT = trumpSuitIdx ? popcount(U & maskSuit(*trumpSuitIdx, profile)) : 0;
+    const bool hasTrump = ctx.trumpSuit.has_value();
+    const unsigned int trumpSuitIdx =
+        hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : NoTrumpSuit;
+
+    const unsigned int nT = hasTrump ? popcount(U & maskSuit(trumpSuitIdx, profile)) : 0;
 
     Mask remaining = hand;
     while(remaining != 0)
@@ -47,7 +59,7 @@ float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx)
         }
 
         float pW = pTop;
-        if(trumpSuitIdx && s != *trumpSuitIdx)
+        if(hasTrump && s != trumpSuitIdx)
         {
             const unsigned int nS = popcount(U & maskSuit(s, profile));
             float pRuff = 0.0f;
@@ -55,7 +67,7 @@ float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx)
             {
                 for(unsigned int o = 0; o < ctx.playerCount; ++o)
                 {
-                    if(o != seat && ctx.handSize[o] > 0 && !(ctx.voidMask[o] & (1 << *trumpSuitIdx)))
+                    if(o != seat && ctx.handSize[o] > 0 && !(ctx.voidMask[o] & (1 << trumpSuitIdx)))
                     {
                         const float pVoid = (ctx.voidMask[o] & (1 << s)) ? 1.0f : hyper0(nS, n, ctx.handSize[o]);
                         const float pHasT = 1.0f - hyper0(nT, n, ctx.handSize[o]);
@@ -69,15 +81,15 @@ float evalHand(Mask hand, unsigned int seat, const EvalContext& ctx)
         E += pW;
     }
 
-    if(trumpSuitIdx)
+    if(hasTrump)
     {
-        const unsigned int myT = popcount(hand & maskSuit(*trumpSuitIdx, profile));
+        const unsigned int myT = popcount(hand & maskSuit(trumpSuitIdx, profile));
         const float oppT = qProb * static_cast<float>(nT);
 
         unsigned int shortSuits = 0;
         for(unsigned int s = 0; s < 4; ++s)
         {
-            if(s != *trumpSuitIdx)
+            if(s != trumpSuitIdx)
             {
                 const unsigned int myCount = popcount(hand & maskSuit(s, profile));
                 const unsigned int uCount = popcount(U & maskSuit(s, profile));

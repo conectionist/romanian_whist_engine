@@ -52,6 +52,11 @@ target_include_directories(romanian_whist_engine_tests PRIVATE
 
 target_compile_features(romanian_whist_engine_tests PRIVATE cxx_std_20)
 
+# The same warnings the engine is built with - see the root CMakeLists.txt. The
+# tests are where most of them were hiding, and Catch2's own headers are clean
+# under this set, so nothing has to be excluded.
+whist_enable_warnings(romanian_whist_engine_tests)
+
 # Cards are compared by value, and half of those comparisons are on an optional
 # (trump, getWinningCard(), everything TrickHeuristics returns). Without this
 # Catch2 renders them "{?}" whatever StringMaker specializations are in scope.

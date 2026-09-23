@@ -52,17 +52,6 @@ GameSetup setupWithNames(std::vector<std::string> names)
     return setup;
 }
 
-// A started game of `count` seats, for the cases that only want something to
-// read accessors off.
-std::unique_ptr<GameEngine> startedGame(unsigned int count,
-                                        GameStructure structure = GameStructure::S_181)
-{
-    auto engine = std::make_unique<GameEngine>();
-    engine->start(setupFor(count, structure));
-
-    return engine;
-}
-
 // The bidding rules used to be testable by hand: place a bet, ask what is
 // forbidden, place another. placeBet() is the engine's own business now, so the
 // only way in is to watch a real game being played - which is the better test

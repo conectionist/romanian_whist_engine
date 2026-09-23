@@ -11,7 +11,7 @@ namespace
 {
 
 unsigned int simulateLowRiskBid(Mask startHand, std::optional<Suit> trumpSuit,
-                                unsigned int playerCount, const DeckProfile& profile)
+                                unsigned int playerCount)
 {
     std::vector<Card> cards = maskToCards(startHand, playerCount);
     std::optional<Card> trumpPlaceholder = std::nullopt;
@@ -57,9 +57,8 @@ float Sampler::computeBidLikelihood(const ReckonerTracker& tracker,
     const auto& model = tracker.opponentModels[opponent];
     if(model.isDeterministic)
     {
-        const auto& profile = getDeckProfile(tracker.playerCount);
         const unsigned int simulated =
-            simulateLowRiskBid(startHand, tracker.trumpSuit, tracker.playerCount, profile);
+            simulateLowRiskBid(startHand, tracker.trumpSuit, tracker.playerCount);
         return (static_cast<int>(simulated) == bid) ? 1.0f : 0.02f;
     }
 

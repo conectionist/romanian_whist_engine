@@ -422,8 +422,21 @@ CardId BasePolicy::chooseCard(Mask hand,
     const Mask unseen = ctx.live & ~hand;
     const bool isFollowing = trick.leadSuit.has_value();
 
-    const std::optional<unsigned int> trumpIdx =
-        ctx.trumpSuit ? std::optional<unsigned int>(static_cast<unsigned int>(*ctx.trumpSuit)) : std::nullopt;
+    // A plain index and a flag rather than an optional, which is what the five
+    // other functions in this file still use. Not an inconsistency to tidy: GCC
+    // reports THIS one's payload as maybe-uninitialized in optimized builds even
+    // though every read is under its own guard, and the five that do not warn
+    // were left alone because rewriting them risks moving Reckoner's play for no
+    // gain. `trumpIdx` is read only where `hasTrump` is true.
+    // The no-trump value indexes nothing, deliberately. 0 would be hearts, so a
+    // read that ever escaped its `hasTrump` guard would quietly treat a real
+    // suit as trump; ~0u makes the same slip fail loudly, which is the one
+    // property the optional was still buying us here.
+    constexpr unsigned int NoTrumpSuit = ~0u;
+
+    const bool hasTrump = ctx.trumpSuit.has_value();
+    const unsigned int trumpIdx =
+        hasTrump ? static_cast<unsigned int>(*ctx.trumpSuit) : NoTrumpSuit;
 
     if(!isFollowing)
     {
@@ -442,7 +455,7 @@ CardId BasePolicy::chooseCard(Mask hand,
 
                     const float p = pLed(c, unseen, ctx, profile);
                     const unsigned int s = cardSuit(c, profile.ranksPerSuit);
-                    const bool isTrump = trumpIdx && s == *trumpIdx;
+                    const bool isTrump = hasTrump && s == trumpIdx;
 
                     if(bestC == INVALID_CARD_ID || p < minPLed)
                     {
@@ -452,7 +465,7 @@ CardId BasePolicy::chooseCard(Mask hand,
                     else if(std::abs(p - minPLed) < 1e-4f)
                     {
                         const unsigned int bestS = cardSuit(bestC, profile.ranksPerSuit);
-                        const bool bestIsTrump = trumpIdx && bestS == *trumpIdx;
+                        const bool bestIsTrump = hasTrump && bestS == trumpIdx;
 
                         // Tie-breaks:
                         // 1. Non-trump over trump
@@ -476,7 +489,7 @@ CardId BasePolicy::chooseCard(Mask hand,
                             continue;
 
                         // 3. Longest suit if holding trumps, else shortest
-                        const bool holdsTrumps = trumpIdx && (hand & maskSuit(*trumpIdx, profile)) != 0;
+                        const bool holdsTrumps = hasTrump && (hand & maskSuit(trumpIdx, profile)) != 0;
                         const int cLen = popcount(hand & maskSuit(s, profile));
                         const int bestLen = popcount(hand & maskSuit(bestS, profile));
                         if(holdsTrumps)
@@ -521,14 +534,14 @@ CardId BasePolicy::chooseCard(Mask hand,
 
                     const unsigned int s = cardSuit(c, profile.ranksPerSuit);
                     const unsigned int hi = popcount(unseen & maskAbove(c, profile));
-                    const bool isTrump = trumpIdx && s == *trumpIdx;
+                    const bool isTrump = hasTrump && s == trumpIdx;
 
                     bool allVoidTrump = true;
-                    if(trumpIdx)
+                    if(hasTrump)
                     {
                         for(unsigned int o = 0; o < ctx.playerCount; ++o)
                         {
-                            if(o != seat && ctx.handSize[o] > 0 && !(ctx.voidMask[o] & (1 << *trumpIdx)))
+                            if(o != seat && ctx.handSize[o] > 0 && !(ctx.voidMask[o] & (1 << trumpIdx)))
                             {
                                 allVoidTrump = false;
                                 break;
@@ -536,8 +549,8 @@ CardId BasePolicy::chooseCard(Mask hand,
                         }
                     }
 
-                    const bool certain = (hi == 0) && (!trumpIdx || isTrump ||
-                                                       popcount(unseen & maskSuit(*trumpIdx, profile)) == 0 ||
+                    const bool certain = (hi == 0) && (!hasTrump || isTrump ||
+                                                       popcount(unseen & maskSuit(trumpIdx, profile)) == 0 ||
                                                        allVoidTrump);
                     if(certain)
                         C |= cardBit(c);
@@ -545,10 +558,10 @@ CardId BasePolicy::chooseCard(Mask hand,
 
                 if(C != 0)
                 {
-                    if(trumpIdx && (C & maskSuit(*trumpIdx, profile)) != 0 &&
-                       popcount(unseen & maskSuit(*trumpIdx, profile)) > 0 && need >= 2)
+                    if(hasTrump && (C & maskSuit(trumpIdx, profile)) != 0 &&
+                       popcount(unseen & maskSuit(trumpIdx, profile)) > 0 && need >= 2)
                     {
-                        return highestCardInMask(C & maskSuit(*trumpIdx, profile), profile);
+                        return highestCardInMask(C & maskSuit(trumpIdx, profile), profile);
                     }
 
                     // Suit with most live cards outside, lowest rank there
@@ -635,8 +648,8 @@ CardId BasePolicy::chooseCard(Mask hand,
 
         const unsigned int leadSuitIdx = static_cast<unsigned int>(*trick.leadSuit);
         const bool isFollowingSuit = (hand & maskSuit(leadSuitIdx, profile)) != 0;
-        const bool isUnderTrumping = trumpIdx && (hand & maskSuit(*trumpIdx, profile)) != 0 &&
-                                     cardSuit(trick.bestCard, profile.ranksPerSuit) == *trumpIdx;
+        const bool isUnderTrumping = hasTrump && (hand & maskSuit(trumpIdx, profile)) != 0 &&
+                                     cardSuit(trick.bestCard, profile.ranksPerSuit) == trumpIdx;
 
         auto computeFollowingCard = [&](PlayIntent intent) -> CardId {
             if(intent == PlayIntent::WantLose)

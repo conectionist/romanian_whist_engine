@@ -545,23 +545,17 @@ unsigned int RolloutEngine::chooseBid(unsigned int R,
         if(sampleCount > 0)
         {
             const auto samples = Sampler::drawSamples(sampleCount, tracker, myHand, rng);
-            float winWeight = 0.0f;
-            float totalWeight = 0.0f;
 
-            for(const auto& s : samples)
-            {
-                std::array<int, 6> dummyTargets{};
-                const float score = rollout(s, static_cast<CardId>(std::countr_zero(myHand)),
-                                           myHand, tracker, knobs, dummyTargets);
-                // When target is 0, score utility is positive if myTricks == 0
-                if(score > 0.0f)
-                {
-                    // Did not win
-                }
-                totalWeight += s.weight;
-            }
-
-            // Quick P(win) check directly by simulating 1 trick
+            // P(win), by playing the single trick out in each sampled deal. A
+            // one-card round needs no rollout: there is one card to play and one
+            // trick to win, so the trick itself IS the whole simulation.
+            //
+            // A loop that called rollout() on every sample stood here and threw
+            // each answer away - 200 discarded rollouts per bid, at any preset
+            // with K_bid > 0. Removing it changed no bid and consumed no RNG,
+            // since rollout() draws nothing. It is not a speed-up worth claiming
+            // either: a rollout of a one-card hand is a single trick, and the
+            // [reckoner] tests time the same before and after. Dead, not slow.
             unsigned int wins = 0;
             const CardId myCard = static_cast<CardId>(std::countr_zero(myHand));
             for(const auto& s : samples)
