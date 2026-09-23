@@ -556,12 +556,21 @@ unsigned int RolloutEngine::chooseBid(unsigned int R,
             // since rollout() draws nothing. It is not a speed-up worth claiming
             // either: a rollout of a one-card hand is a single trick, and the
             // [reckoner] tests time the same before and after. Dead, not slow.
-            unsigned int wins = 0;
+            //
+            // The samples are IMPORTANCE-weighted - drawSamples() scores each
+            // deal by how well it explains the bids already made, then
+            // normalises - so they have to be averaged by weight, exactly as the
+            // R >= 2 path below does. Counting them one apiece would estimate
+            // the win rate of the PROPOSAL rather than of the posterior, which
+            // near the 6/13 threshold is the difference between bidding 1 and 0.
+            float winWeight = 0.0f;
+            float totalWeight = 0.0f;
             const CardId myCard = static_cast<CardId>(std::countr_zero(myHand));
+            const auto& profile = getDeckProfile(tracker.playerCount);
+
             for(const auto& s : samples)
             {
                 TrickState trick{};
-                const auto& profile = getDeckProfile(tracker.playerCount);
 
                 // Play in seat order from opener
                 unsigned int cur = tracker.opener;
@@ -584,11 +593,17 @@ unsigned int RolloutEngine::chooseBid(unsigned int R,
                     }
                     cur = (cur + 1) % tracker.playerCount;
                 }
+                totalWeight += s.weight;
                 if(trick.bestHolder == tracker.mySeat)
-                    wins++;
+                    winWeight += s.weight;
             }
 
-            const float p = static_cast<float>(wins) / static_cast<float>(samples.size());
+            // Dividing by the weight actually accumulated also covers the
+            // degenerate draw: no samples means no weight, and the R >= 2 path
+            // guards the same expression the same way rather than testing
+            // samples.empty() separately.
+            const float p = (totalWeight > 0.0f) ? (winWeight / totalWeight) : 0.0f;
+
             // Bid 1 iff p > 6/13 ≈ 0.4615
             const unsigned int bid = (p > (6.0f / 13.0f)) ? 1 : 0;
             return (forbiddenBet && *forbiddenBet == bid) ? (1 - bid) : bid;

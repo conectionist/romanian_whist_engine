@@ -23,6 +23,11 @@ engine does; it changes what its own build refuses to let through.
 
 - **`ReckonerStrategy` did 200 rollouts per one-trick bid and discarded every result.** The bid came
   from a separate calculation below it. No bid changes; the work was simply thrown away.
+- **The one-trick bid ignored its own importance weights.** Its samples are drawn from a constrained
+  proposal and weighted by how well each deal explains the bids already made, but that estimate
+  counted them one apiece — measuring the proposal's win rate rather than the posterior's. It now
+  averages by weight, as every other bid already did. The two estimates differ by 0.007 on average,
+  so the bid moves only near the decision threshold: 4 bids in 608 over 100 measured games.
 - `BetContext` and `PlayContext` give their `std::optional` members default initializers, so
   `BetContext{hand}` and `PlayContext{hand, played}` no longer warn under
   `-Wmissing-field-initializers` in a consumer's build.
