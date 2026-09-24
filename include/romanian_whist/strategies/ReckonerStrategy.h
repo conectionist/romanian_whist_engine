@@ -26,7 +26,7 @@ private:
     std::string playerName;
 
 public:
-    explicit ReckonerStrategy(reckoner::ReckonerKnobs _knobs = reckoner::ReckonerKnobs::hard(),
+    explicit ReckonerStrategy(reckoner::ReckonerKnobs _knobs = reckoner::ReckonerKnobs::gamma(),
                              std::optional<std::uint32_t> seed = std::nullopt);
 
     explicit ReckonerStrategy(reckoner::ReckonerPreset preset,
@@ -68,7 +68,7 @@ private:
 };
 
 SeatSetup makeReckonerSeat(const std::string& name, GameEngine& engine,
-                           const reckoner::ReckonerKnobs& knobs = reckoner::ReckonerKnobs::hard(),
+                           const reckoner::ReckonerKnobs& knobs = reckoner::ReckonerKnobs::gamma(),
                            std::optional<std::uint32_t> seed = std::nullopt);
 
 } // namespace romanian_whist

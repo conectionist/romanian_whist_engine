@@ -465,7 +465,7 @@ is how you make sure it is not you.
 base policy's choice when the candidates are near-equal. It also guarantees the MC layer is never
 worse than the base policy in a measurable way — useful when you tune.
 
-### 5.5 Optional endgame exact search (Brutal difficulty only)
+### 5.5 Optional endgame exact search (Delta preset only)
 
 With `rem <= ENDGAME_N` tricks left, replace rollouts by an exact max-n search per sample: at
 each node the player to move picks the card maximizing their own `utility` (their score, minus
@@ -473,7 +473,7 @@ their sabotage term); return my utility at the root; average over samples. Branc
 (each player holds `rem` cards), so for N ≤ 4 use `ENDGAME_N = 3` ((3!)^4 ≈ 1.3k leaves per
 sample), for N ≥ 5 use `ENDGAME_N = 2`. Caveat: max-n assumes opponents see the deal, which is
 optimistic about their precision; keep it to the last 2–3 tricks where humans really are that
-precise. Hard difficulty and below can skip this entirely — the rollouts already get the endgame
+precise. Gamma and the presets below it can skip this entirely — the rollouts already get the endgame
 nearly right because the sampler has usually pinned the hands down by then.
 
 ### 5.6 Worked example (why a human finds this unpleasant)
@@ -538,7 +538,7 @@ What this captures that LowRisk cannot:
 The rollouts use the base policy for me, which is weaker than the MC player that will actually
 play the hand, so U is slightly conservative. That bias is in the safe direction (it prefers
 bids with high simulated hit rate). If tournament results show under-bidding, sharpen with
-`P(hit)^GAMMA`, GAMMA ≈ 0.85 (§9).
+`P(hit)^hitSharpening`, `hitSharpening` ≈ 0.85 (§9).
 
 ### 6.2 One-trick rounds
 
@@ -609,9 +609,9 @@ constraints are not wired correctly.
 
 ---
 
-## 9. Knobs and difficulty presets
+## 9. Knobs and presets
 
-| Knob | Meaning | Easy | Medium | Hard | Brutal |
+| Knob | Meaning | Alpha | Beta | Gamma | Delta |
 |---|---|---|---|---|---|
 | `K_play` | samples per play decision (0 = base policy only) | 0 | 60 | 200 | 400 |
 | `K_bid` | samples per bid (0 = bid `round(evalHand)` with the ±1 restriction fix) | 0 | 100 | 250 | 500 |
@@ -623,13 +623,16 @@ constraints are not wired correctly.
 | `ENDGAME_N` | exact max-n depth | 0 | 0 | 0 | 2–3 |
 | `epsilon` | random legal card with this probability (dumbing-down) | 0.15 | 0.05 | 0 | 0 |
 | bid noise | add ±1 to the bid with this probability | 0.2 | 0.05 | 0 | 0 |
-| `GAMMA` | P(hit) sharpening in bidding | 1 | 1 | 0.9 | 0.85 |
+| `hitSharpening` | P(hit) sharpening in bidding | 1 | 1 | 0.9 | 0.85 |
 
 Evaluator / base-policy constants, same at every level: `CATCH` 0.7, `RUFF_W` 0.4, `LONG_W` 0.5,
 `WASTE_BONUS` 0.4, `ESS_MIN` 0.25. Tune them by tournament, not by hand.
 
-Easy is roughly LowRisk-with-memory; Medium already beats LowRisk clearly; Hard is the target
-"skilled human" setting; Brutal adds the endgame solver and heavier sampling.
+The presets were designed as a ladder: Alpha roughly LowRisk-with-memory, Beta already beating
+LowRisk clearly, Gamma the target "skilled human" setting, Delta adding the endgame solver and
+heavier sampling. In play they do not rank in that order — Gamma is often no stronger than Alpha or
+Beta, and Delta overbids and regularly finishes last — which is why they carry neutral names rather
+than difficulty labels.
 
 Tuning method: round-robin tournaments of ≥ 5,000 rounds per configuration, fixed RNG seeds,
 coordinate-descent on one knob at a time, metric = mean points per round at a mixed table
@@ -713,8 +716,8 @@ See [issue #17](https://github.com/conectionist/romanian_whist_engine/issues/17)
 and UBSan reports them.
 
 It takes a sample degenerate enough to leave a simulated seat with nothing legal, which the
-observer callbacks do not produce on their own: the `[reckoner]` suite plays full games at Easy,
-Hard and Brutal with zero UBSan errors. It matters because it is the layer *below* the guard
+observer callbacks do not produce on their own: the `[reckoner]` suite plays full games at Alpha,
+Gamma and Delta with zero UBSan errors. It matters because it is the layer *below* the guard
 above — `getBestChoice()` can contain a bad answer and can contain an exception, but it cannot
 contain undefined behaviour.
 
@@ -725,7 +728,7 @@ red. See [issue #16](https://github.com/conectionist/romanian_whist_engine/issue
 
 ### What the suite does about them today
 
-`tests/ReckonerRobustnessTests.cpp` covers the drift cases at the **Easy** preset specifically,
-because `K_play = 0` means Easy answers from the base policy and never enters the rollout. That
+`tests/ReckonerRobustnessTests.cpp` covers the drift cases at the **Alpha** preset specifically,
+because `K_play = 0` means Alpha answers from the base policy and never enters the rollout. That
 keeps the suite UBSan-clean at the cost of real coverage: no test currently exercises drift
-*through* the rollout, which is the path Hard and Brutal take. That coverage returns with #16.
+*through* the rollout, which is the path Gamma and Delta take. That coverage returns with #16.

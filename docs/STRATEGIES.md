@@ -162,7 +162,7 @@ From the tournament tests in `tests/CyborgTournamentTests.cpp`, which pin these 
 | Table | Cyborg | Others |
 |---|---|---|
 | 1 Cyborg, 3 LowRisk (80 games) | **75.3** | LowRisk 60.9 |
-| 1 Cyborg, 1 Reckoner `medium()`, 2 LowRisk (15 games) | 72.7 | Reckoner **87.5**, LowRisk 60.2 |
+| 1 Cyborg, 1 Reckoner `beta()`, 2 LowRisk (15 games) | 72.7 | Reckoner **87.5**, LowRisk 60.2 |
 
 Against LowRisk it is ahead at every table size — by 16.2, 10.9, 13.1 and 9.4 points a game
 at 2, 3, 5 and 6 players, and by 3.7 in the 8-1-8 structure (smaller samples). The Reckoner is
@@ -182,18 +182,20 @@ of them, the Reckoner keeps a model of the whole round — every card played, wh
 void in which suit, what everyone bid — and searches over deals consistent with it before
 each decision.
 
-Four presets, which differ only in the numbers behind them:
+Four presets, which differ only in the numbers behind them. Their names are deliberately
+neutral, not a difficulty ladder: each one searches more than the one before, but in play that
+has not made it stronger — `delta()` overbids and often finishes last.
 
 | Preset | Memory | Deals sampled per card | Notable |
 |---|---|---|---|
-| `ReckonerKnobs::easy()` | the current trick only | none | Plays a random legal card 15% of the time |
-| `ReckonerKnobs::medium()` | the full round | 60 | Beats `LowRiskStrategy` clearly |
-| `ReckonerKnobs::hard()` | the full round | 200 | Weighs breaking the score leader's bid at double |
-| `ReckonerKnobs::brutal()` | the full round | 400 | Solves the last two tricks exactly |
+| `ReckonerKnobs::alpha()` | the current trick only | none | Plays a random legal card 15% of the time |
+| `ReckonerKnobs::beta()` | the full round | 60 | Beats `LowRiskStrategy` clearly |
+| `ReckonerKnobs::gamma()` | the full round | 200 | Weighs breaking the score leader's bid at double |
+| `ReckonerKnobs::delta()` | the full round | 400 | Solves the last two tricks exactly |
 
 Every knob behind them is tabulated in
-[romanian-whist-reckoner-ai.md](romanian-whist-reckoner-ai.md) §9. `Easy` samples nothing,
-so it costs about what `LowRiskStrategy` costs; `Brutal` is the only strategy here whose
+[romanian-whist-reckoner-ai.md](romanian-whist-reckoner-ai.md) §9. `alpha()` samples nothing,
+so it costs about what `LowRiskStrategy` costs; `delta()` is the only strategy here whose
 decisions are measurable in milliseconds rather than microseconds.
 
 ### It has to be registered as an observer
@@ -207,7 +209,7 @@ its own seat by matching its name against the table — so it must reach the eng
 `makeReckonerSeat()` does the whole dance and is what you should use:
 
 ```cpp
-SeatSetup seat = makeReckonerSeat("Ana", engine, reckoner::ReckonerKnobs::hard(), seed);
+SeatSetup seat = makeReckonerSeat("Ana", engine, reckoner::ReckonerKnobs::gamma(), seed);
 ```
 
 If you build one by hand instead, all three steps are yours: `setPlayerName()`,
@@ -222,7 +224,7 @@ register it there. That is a real constraint on such clients and not merely a co
 
 ### Seeding
 
-Like `RandomCardStrategy`, it draws: the deal sampler, the `Easy` preset's random-card roll
+Like `RandomCardStrategy`, it draws: the deal sampler, the `alpha()` preset's random-card roll
 and the bid noise all come from one `std::mt19937` seeded once at construction. Pass a seed
 for a reproducible game; without one it takes `std::random_device` once. Note that
 reproducibility holds for the same deal against the same opponents — the generator is

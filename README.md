@@ -727,7 +727,7 @@ whatever you set up before the call, because nothing else will.
 | `LowRiskStrategy` | Bids the tricks its hand will take whether it wants them or not — usually 0 — then plays to that bid: takes tricks as cheaply as it can while it still owes some, and ducks every trick after that |
 | `DuckingStrategy` | Bids 0 come what may and never chases a trick, dumping its highest cards at the moments they cannot win |
 | `CyborgStrategy` | Counts every card played and prices each one exactly, then bids for the best expected score and plays to hit that bid. Rule-based and deterministic, with one strength; about half a microsecond a decision. **Needs registering as an observer — see below.** |
-| `ReckonerStrategy` | Counts every card played and searches imagined deals before each decision. Four presets, from a memoryless `Easy` to a `Brutal` that solves the endgame exactly. **Needs registering as an observer — see below.** |
+| `ReckonerStrategy` | Counts every card played and searches imagined deals before each decision. Four presets, `Alpha` to `Delta`, from memoryless to solving the endgame exactly; the names are neutral because more search has not meant stronger play. **Needs registering as an observer — see below.** |
 
 The two low-risk strategies share their judgement calls through
 `<romanian_whist/strategies/TrickHeuristics.h>`, which is public — reuse it rather than
@@ -747,7 +747,7 @@ GameEngine engine;
 GameSetup setup;
 
 setup.seats.push_back(makeCyborgSeat("Ana", engine));
-setup.seats.push_back(makeReckonerSeat("Bogdan", engine, reckoner::ReckonerKnobs::hard()));
+setup.seats.push_back(makeReckonerSeat("Bogdan", engine, reckoner::ReckonerKnobs::gamma()));
 // ...other seats...
 
 engine.start(std::move(setup));   // AFTER the seats were built against this engine
@@ -759,7 +759,7 @@ are reached before the strategy ever saw a round start.
 
 `CyborgStrategy` has no presets and no randomness, so it takes no seed and two of them play
 the same game identically; its design is in `docs/romanian-whist-cyborg-ai.md`. Reckoner's
-presets are `ReckonerKnobs::easy() / medium() / hard() / brutal()`, and
+presets are `ReckonerKnobs::alpha() / beta() / gamma() / delta()`, and
 `docs/romanian-whist-reckoner-ai.md` documents every knob behind them.
 
 Write your own by implementing `IStrategy` from

@@ -428,7 +428,7 @@ count as a reference. The expected-score bid shipped: +15.5, +12.0, +11.0, +8.9,
 - **1 Cyborg vs 3 LowRisk**, 15 seeded games: `cyborgAvg > lowRiskAvg + MARGIN`. `MARGIN` cannot be
   written in advance — run it, look at the real gap, pin a margin below it with headroom for seed
   variation. A bare `> lowRiskAvg` would not catch Cyborg dropping from +30 to +2.
-- **1 Cyborg vs 1 Reckoner (`medium()`) vs 2 LowRisk**: `reckonerAvg > cyborgAvg` **and**
+- **1 Cyborg vs 1 Reckoner (`beta()`) vs 2 LowRisk**: `reckonerAvg > cyborgAvg` **and**
   `cyborgAvg > lowRiskAvg`. The design's bar: beat LowRisk comfortably, lose to Reckoner narrowly. If
   Cyborg beats Reckoner, suspect a bug in one of them before celebrating. Reckoner makes these scores
   float-dependent — assert the ordering, don't pin exact values, or gate exact pins on
@@ -445,7 +445,7 @@ count as a reference. The expected-score bid shipped: +15.5, +12.0, +11.0, +8.9,
 | Bar | Measured | Asserted |
 |---|---|---|
 | 1 Cyborg vs 3 LowRisk (seeds 1000–1019, every seat) | Cyborg 75.3, LowRisk 60.9 | Cyborg > LowRisk + 7 |
-| 1 Cyborg vs 1 Reckoner `medium()` vs 2 LowRisk (15 games) | Reckoner 87.5, Cyborg 72.7, LowRisk 60.2 | Reckoner > Cyborg > LowRisk |
+| 1 Cyborg vs 1 Reckoner `beta()` vs 2 LowRisk (15 games) | Reckoner 87.5, Cyborg 72.7, LowRisk 60.2 | Reckoner > Cyborg > LowRisk |
 | Sweep at 2, 3, 5, 6 players (5 seeds, every seat) | +16.2, +10.9, +13.1, +9.4 | Cyborg > LowRisk at each |
 | `S_818` at four players | +3.7 | Cyborg > LowRisk |
 | Latency | about 0.5 µs a decision on Release | mean under 200 µs |
