@@ -427,7 +427,7 @@ TEST_CASE("Cyborg tournament: Reckoner ahead of Cyborg ahead of LowRisk", "[cybo
             if(i == cyborgSeat)
                 setup.seats.push_back(makeCyborgSeat(name, engine));
             else if(i == reckonerSeat)
-                setup.seats.push_back(makeReckonerSeat(name, engine, reckoner::ReckonerKnobs::medium(), 2000 + g));
+                setup.seats.push_back(makeReckonerSeat(name, engine, reckoner::ReckonerKnobs::beta(), 2000 + g));
             else
                 setup.seats.push_back(
                     {name, std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});

@@ -437,7 +437,7 @@ CardId RolloutEngine::choosePlay(Mask myHand,
 
     const CardId baseRep = findEquivalentRepresentative(baseMove, candidates, unseen, profile);
 
-    // If K_play == 0 (Easy level), use base policy move
+    // If K_play == 0 (Alpha preset), use base policy move
     if(knobs.K_play == 0)
     {
         if(knobs.epsilon > 0.0f)
@@ -739,11 +739,11 @@ unsigned int RolloutEngine::chooseBid(unsigned int R,
 
         float u = (totalW > 0.0f) ? (sumUtility / totalW) : -100.0f;
 
-        // Apply GAMMA sharpening if specified
-        if(knobs.gamma != 1.0f && totalW > 0.0f)
+        // Apply hitSharpening if specified
+        if(knobs.hitSharpening != 1.0f && totalW > 0.0f)
         {
             const float pHit = hitWeight / totalW;
-            const float sharpened = std::pow(std::max(0.0f, pHit), knobs.gamma);
+            const float sharpened = std::pow(std::max(0.0f, pHit), knobs.hitSharpening);
             u = u * sharpened;
         }
 
@@ -754,7 +754,7 @@ unsigned int RolloutEngine::chooseBid(unsigned int R,
         }
     }
 
-    // Bid noise (dumbing down for Easy/Medium)
+    // Bid noise (dumbing down for Alpha/Beta)
     if(knobs.bidNoise > 0.0f)
     {
         std::uniform_real_distribution<float> uDist(0.0f, 1.0f);

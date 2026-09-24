@@ -5,7 +5,7 @@
 > section wrong, the section was rewritten and says what changed; the phases and the measurements
 > behind each change are in [cyborg-implementation-plan.md](cyborg-implementation-plan.md).
 > Measured at four players, one Cyborg scores 14.4 points a game more than three LowRisk and 14.7
-> fewer than a Reckoner `medium()`, at about half a microsecond a decision.
+> fewer than a Reckoner `beta()`, at about half a microsecond a decision.
 > `tests/CyborgTournamentTests.cpp` pins both results.
 
 A rule-based strategy built on one idea: **split every suit down the middle**. The top half of the
@@ -1080,7 +1080,7 @@ narrowly. If it beats Reckoner, one of them has a bug — most likely Cyborg rea
 not have (`context.hand` in a Forehead round, §4.7) or Reckoner's rollouts being mis-seeded.
 
 **As shipped** it cleared the first half and lost to Reckoner by more than "narrowly": at four
-players Reckoner `medium()` 87.5, Cyborg 72.7, LowRisk 60.2 points a game. The tournament tests
+players Reckoner `beta()` 87.5, Cyborg 72.7, LowRisk 60.2 points a game. The tournament tests
 assert that order, and a margin of 7 points over LowRisk where 14.4 was measured.
 
 ---

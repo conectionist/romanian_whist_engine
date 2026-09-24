@@ -14,11 +14,11 @@ using namespace romanian_whist::test;
 
 TEST_CASE("ReckonerStrategy: full game integration across player counts and presets", "[reckoner]")
 {
-    // Test 2 players with Easy preset
+    // Test 2 players with Alpha preset
     {
         GameEngine engine;
         GameSetup setup;
-        setup.seats.push_back(makeReckonerSeat("ReckonerEasy", engine, reckoner::ReckonerKnobs::easy(), 42));
+        setup.seats.push_back(makeReckonerSeat("ReckonerAlpha", engine, reckoner::ReckonerKnobs::alpha(), 42));
         setup.seats.push_back({"LowRisk", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.shuffleSeed = 100;
 
@@ -27,11 +27,11 @@ TEST_CASE("ReckonerStrategy: full game integration across player counts and pres
         REQUIRE(engine.getStatus() == GameStatus::Finished);
     }
 
-    // Test 4 players with Hard preset
+    // Test 4 players with Gamma preset
     {
         GameEngine engine;
         GameSetup setup;
-        setup.seats.push_back(makeReckonerSeat("ReckonerHard", engine, reckoner::ReckonerKnobs::hard(), 42));
+        setup.seats.push_back(makeReckonerSeat("ReckonerGamma", engine, reckoner::ReckonerKnobs::gamma(), 42));
         setup.seats.push_back({"LowRisk1", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"LowRisk2", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"Ducking", std::make_unique<AiMoveProvider>(std::make_unique<DuckingStrategy>())});
@@ -42,11 +42,11 @@ TEST_CASE("ReckonerStrategy: full game integration across player counts and pres
         REQUIRE(engine.getStatus() == GameStatus::Finished);
     }
 
-    // Test 4 players with Brutal preset
+    // Test 4 players with Delta preset
     {
         GameEngine engine;
         GameSetup setup;
-        setup.seats.push_back(makeReckonerSeat("ReckonerBrutal", engine, reckoner::ReckonerKnobs::brutal(), 42));
+        setup.seats.push_back(makeReckonerSeat("ReckonerDelta", engine, reckoner::ReckonerKnobs::delta(), 42));
         setup.seats.push_back({"LowRisk1", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"LowRisk2", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"FirstCard", std::make_unique<AiMoveProvider>(std::make_unique<FirstCardStrategy>())});
@@ -89,7 +89,7 @@ TEST_CASE("ReckonerStrategy: pinned scores across every deck profile", "[reckone
         setup.structure = structure;
         setup.shuffleSeed = shuffleSeed;
 
-        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::medium(), 999));
+        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::beta(), 999));
         for(unsigned int i = 1 ; i < playerCount ; i++)
         {
             const std::string name = "LowRisk" + std::to_string(i);
@@ -115,7 +115,7 @@ TEST_CASE("ReckonerStrategy: deterministic replay given same seed", "[reckoner]"
     auto runGame = [](std::uint32_t seed) {
         GameEngine engine;
         GameSetup setup;
-        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::medium(), 999));
+        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::beta(), 999));
         setup.seats.push_back({"LowRisk1", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"LowRisk2", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"Ducking", std::make_unique<AiMoveProvider>(std::make_unique<DuckingStrategy>())});

@@ -27,7 +27,7 @@ TEST_CASE("Reckoner beats LowRisk in multi-game tournament and satisfies latency
         GameEngine engine;
         GameSetup setup;
 
-        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::medium(), 1000 + g));
+        setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::beta(), 1000 + g));
         setup.seats.push_back({"LowRisk1", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"LowRisk2", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
         setup.seats.push_back({"LowRisk3", std::make_unique<AiMoveProvider>(std::make_unique<LowRiskStrategy>())});
@@ -54,6 +54,6 @@ TEST_CASE("Reckoner beats LowRisk in multi-game tournament and satisfies latency
     // In 15 games of 24 rounds, each round has average ~4 tricks.
     // That's ~15 * 24 = 360 bids and ~15 * 24 * 4 ≈ 1440 plays, total ~1800 decisions.
     // Total elapsed time should be well under 1800 * 100ms = 180 seconds.
-    // In practice with Medium preset on 1 core, it takes only ~2-4 seconds total (~1-2 ms per decision).
+    // In practice with Beta preset on 1 core, it takes only ~2-4 seconds total (~1-2 ms per decision).
     REQUIRE(elapsedMs < 60000);
 }

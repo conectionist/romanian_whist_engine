@@ -6,10 +6,10 @@ namespace romanian_whist::reckoner
 
 enum class ReckonerPreset
 {
-    Easy,
-    Medium,
-    Hard,
-    Brutal
+    Alpha,
+    Beta,
+    Gamma,
+    Delta
 };
 
 struct ReckonerKnobs
@@ -25,9 +25,9 @@ struct ReckonerKnobs
     unsigned int endgameN = 0;
     float epsilon = 0.0f;
     float bidNoise = 0.0f;
-    float gamma = 0.9f;
+    float hitSharpening = 0.9f;
 
-    static constexpr ReckonerKnobs easy()
+    static constexpr ReckonerKnobs alpha()
     {
         ReckonerKnobs k{};
         k.K_play = 0;
@@ -41,11 +41,11 @@ struct ReckonerKnobs
         k.endgameN = 0;
         k.epsilon = 0.15f;
         k.bidNoise = 0.20f;
-        k.gamma = 1.0f;
+        k.hitSharpening = 1.0f;
         return k;
     }
 
-    static constexpr ReckonerKnobs medium()
+    static constexpr ReckonerKnobs beta()
     {
         ReckonerKnobs k{};
         k.K_play = 60;
@@ -59,11 +59,11 @@ struct ReckonerKnobs
         k.endgameN = 0;
         k.epsilon = 0.05f;
         k.bidNoise = 0.05f;
-        k.gamma = 1.0f;
+        k.hitSharpening = 1.0f;
         return k;
     }
 
-    static constexpr ReckonerKnobs hard()
+    static constexpr ReckonerKnobs gamma()
     {
         ReckonerKnobs k{};
         k.K_play = 200;
@@ -77,11 +77,11 @@ struct ReckonerKnobs
         k.endgameN = 0;
         k.epsilon = 0.0f;
         k.bidNoise = 0.0f;
-        k.gamma = 0.9f;
+        k.hitSharpening = 0.9f;
         return k;
     }
 
-    static constexpr ReckonerKnobs brutal()
+    static constexpr ReckonerKnobs delta()
     {
         ReckonerKnobs k{};
         k.K_play = 400;
@@ -95,7 +95,7 @@ struct ReckonerKnobs
         k.endgameN = 2;
         k.epsilon = 0.0f;
         k.bidNoise = 0.0f;
-        k.gamma = 0.85f;
+        k.hitSharpening = 0.85f;
         return k;
     }
 };

@@ -3,7 +3,20 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
-## Unreleased
+## 5.0.0
+
+**The Reckoner's presets are renamed, and `ReckonerKnobs` has a renamed field — both break
+source compatibility.** The old names promised a difficulty ladder the presets do not climb: in
+play `Hard` is often no stronger than `Easy` or `Medium`, and `Brutal` overbids and regularly
+finishes last. Until they are retuned, they carry names that promise nothing.
+
+### Changed
+
+- `ReckonerPreset::Easy / Medium / Hard / Brutal` are now `Alpha / Beta / Gamma / Delta`, and
+  `ReckonerKnobs::easy() / medium() / hard() / brutal()` are now `alpha() / beta() / gamma() /
+  delta()`. The knobs behind each preset are unchanged.
+- `ReckonerKnobs::gamma` (the P(hit) sharpening exponent) is now `ReckonerKnobs::hitSharpening`,
+  freeing the name for the preset.
 
 **The engine builds with warnings on, and CI treats them as errors.** Nothing here changes what the
 engine does; it changes what its own build refuses to let through.

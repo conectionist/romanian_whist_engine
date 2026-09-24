@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(RomanianWhistEngine
-    VERSION 4.3.0
+    VERSION 5.0.0
     DESCRIPTION "Reusable Romanian Whist game engine"
     LANGUAGES CXX)
 

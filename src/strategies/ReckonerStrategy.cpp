@@ -24,15 +24,15 @@ ReckonerStrategy::ReckonerStrategy(reckoner::ReckonerPreset preset, std::optiona
     : ReckonerStrategy([preset]() {
           switch(preset)
           {
-              case reckoner::ReckonerPreset::Easy:
-                  return reckoner::ReckonerKnobs::easy();
-              case reckoner::ReckonerPreset::Medium:
-                  return reckoner::ReckonerKnobs::medium();
-              case reckoner::ReckonerPreset::Brutal:
-                  return reckoner::ReckonerKnobs::brutal();
-              case reckoner::ReckonerPreset::Hard:
+              case reckoner::ReckonerPreset::Alpha:
+                  return reckoner::ReckonerKnobs::alpha();
+              case reckoner::ReckonerPreset::Beta:
+                  return reckoner::ReckonerKnobs::beta();
+              case reckoner::ReckonerPreset::Delta:
+                  return reckoner::ReckonerKnobs::delta();
+              case reckoner::ReckonerPreset::Gamma:
               default:
-                  return reckoner::ReckonerKnobs::hard();
+                  return reckoner::ReckonerKnobs::gamma();
           }
       }(), seed)
 {

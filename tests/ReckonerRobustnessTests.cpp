@@ -25,7 +25,7 @@ TEST_CASE("ReckonerStrategy: an unregistered strategy refuses to decide", "[reck
     // it. Constructing one and handing it to AiMoveProvider is the natural thing
     // to do, compiles, and used to produce a bot that played a four-handed game at
     // whatever table it was actually sitting at.
-    ReckonerStrategy strategy(reckoner::ReckonerKnobs::easy(), 42);
+    ReckonerStrategy strategy(reckoner::ReckonerKnobs::alpha(), 42);
 
     // JACK..ACE, because the deck a Reckoner encodes through depends on the seat
     // count: ranksPerSuit is 2n and the low rank is 1 + (6-n)*2, so a two-handed
@@ -66,10 +66,10 @@ TEST_CASE("ReckonerStrategy: a stale tracker cannot produce an illegal card",
     // a seat resolved wrongly, a future bug in the tracker. The strategy cannot
     // detect drift, so what is asserted is that it cannot ACT on it illegally.
     //
-    // EASY, AND THE PRESET IS NOT INCIDENTAL. Easy has K_play = 0, so choosePlay()
+    // ALPHA, AND THE PRESET IS NOT INCIDENTAL. Alpha has K_play = 0, so choosePlay()
     // answers from the base policy and never enters the Monte-Carlo rollout - and
     // the rollout is not safe to drive from a tracker this inconsistent. Written
-    // first with hard(), this case made UBSan report two errors inside the
+    // first with gamma(), this case made UBSan report two errors inside the
     // SIMULATION: BasePolicy::chooseCard() returns INVALID_CARD_ID (255) for an
     // imagined seat holding no legal card, and RolloutEngine::rollout() passes it
     // to cardBit() and maskSuit() unchecked - a 255-bit shift and a read of
@@ -79,9 +79,9 @@ TEST_CASE("ReckonerStrategy: a stale tracker cannot produce an illegal card",
     // rollout's handling of its own samples, it is unreachable from ordinary play
     // (the engine's own [reckoner] games report zero UBSan errors), and a guess at
     // the right recovery there would bias the estimator in a way no assertion here
-    // would catch. What is tested at Easy is the same guard on the same drift; the
+    // would catch. What is tested at Alpha is the same guard on the same drift; the
     // rollout half is written up separately.
-    ReckonerStrategy strategy(reckoner::ReckonerKnobs::easy(), 7);
+    ReckonerStrategy strategy(reckoner::ReckonerKnobs::alpha(), 7);
 
     strategy.onRoundStart(4, 4, std::nullopt, 0, 0);
 
@@ -122,7 +122,7 @@ TEST_CASE("ReckonerStrategy: a hand its deck cannot encode still gets a legal an
     //
     // Found by writing the two cases above: they failed with "card rank 5 not in
     // deck for 2 players", which is this path, reached by accident.
-    ReckonerStrategy strategy(reckoner::ReckonerKnobs::easy(), 3);
+    ReckonerStrategy strategy(reckoner::ReckonerKnobs::alpha(), 3);
 
     // Told it is at a two-handed table...
     strategy.onRoundStart(2, 3, std::nullopt, 0, 0);
@@ -180,7 +180,7 @@ TEST_CASE("ReckonerStrategy: a registered strategy still plays a whole legal gam
     GameEngine engine;
     GameSetup setup;
 
-    setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::easy(), 42));
+    setup.seats.push_back(makeReckonerSeat("Reckoner", engine, reckoner::ReckonerKnobs::alpha(), 42));
     setup.seats.push_back({ "LowRisk", std::make_unique<AiMoveProvider>(
                                            std::make_unique<LowRiskStrategy>()) });
     setup.seats.push_back({ "LowRisk2", std::make_unique<AiMoveProvider>(
