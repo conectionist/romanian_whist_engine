@@ -89,14 +89,15 @@ Releases are tagged, so pin one rather than tracking a branch:
 ```bash
 cd libs/RomanianWhistEngine
 git fetch --tags
-git checkout v4.3.0
+git checkout v5.0.0
 cd ../..
 git add libs/RomanianWhistEngine
-git commit -m "Update Romanian Whist engine to 4.3.0"
+git commit -m "Update Romanian Whist engine to 5.0.0"
 ```
 
 `git pull origin master` also works if you would rather track the tip. Either way, read
-[CHANGELOG.md](CHANGELOG.md) before crossing a major version — 4.0.0 broke most of the 3.x API.
+[CHANGELOG.md](CHANGELOG.md) before crossing a major version — 4.0.0 broke most of the 3.x API,
+and 5.0.0 renamed the Reckoner presets.
 
 ---
 

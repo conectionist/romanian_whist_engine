@@ -3,7 +3,7 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
-## Unreleased
+## 5.0.0
 
 **The Reckoner's presets are renamed, and `ReckonerKnobs` has a renamed field — both break
 source compatibility.** The old names promised a difficulty ladder the presets do not climb: in
