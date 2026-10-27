@@ -1,12 +1,24 @@
 name: CI
 
+# A pull request is built by its pull_request run, so push builds only master.
+# Building every pushed branch as well ran each PR's builds twice, and a pushed
+# tag rebuilt a commit master had already built. A branch with no PR can still
+# be built by hand with "Run workflow".
 on:
   push:
+    branches: [master]
     paths-ignore:
       - '**/*.md'
   pull_request:
     paths-ignore:
       - '**/*.md'
+  workflow_dispatch:
+
+# A new push to a PR cancels that PR's older run. Runs on master are never
+# cancelled, so one merge cannot cut short the run (or release) of the last.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
