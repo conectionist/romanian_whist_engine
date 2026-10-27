@@ -3,6 +3,15 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
+## Unreleased
+
+### Changed
+
+- **The license is now the AGPL-3.0-or-later**, in place of the GPL-3.0. The new obligation is
+  section 13: a modified engine that people use over a network, such as a game server built on it,
+  must offer those users its source code. Versions up to and including 5.0.0 stay under the
+  GPL-3.0. No code changes.
+
 ## 5.0.0
 
 **The Reckoner's presets are renamed, and `ReckonerKnobs` has a renamed field — both break
