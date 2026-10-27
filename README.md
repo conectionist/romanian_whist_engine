@@ -818,3 +818,13 @@ docs/RULES.md               the rules this engine implements
 - [romanian_whist_desktop](https://github.com/conectionist/romanian_whist_desktop) —
   Qt desktop client. Its [QT_CLIENT_PLAN.md](https://github.com/conectionist/romanian_whist_desktop/blob/master/docs/QT_CLIENT_PLAN.md)
   is the worked example of running the engine on a thread of its own
+
+## License
+
+The engine is licensed under the [GNU Affero General Public License, version 3 or later](LICENSE)
+(`AGPL-3.0-or-later`). Versions up to and including 5.0.0 were released under the GPL-3.0, and
+copies of those versions stay under it.
+
+In practice: if you distribute a program that contains the engine, or let people use a modified
+version of it over a network (a game server built on the engine, for example), you must offer
+those users the complete source code of that program under the same license.
