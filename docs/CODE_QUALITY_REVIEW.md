@@ -260,9 +260,8 @@ Add `[[nodiscard]]` to functions whose result must be used, such as
 
 ### 7. Tidy the rest
 
-- Remove the history and the comments that repeat the code (see weakness 8). The desktop client's
-  `CLAUDE.md` now has a rule for comments; a `CLAUDE.md` here with the same rule would keep new code
-  in line.
+- Remove the history and the comments that repeat the code (see weakness 8). **Done for new code:**
+  `CLAUDE.md` now has the same rule for comments as the desktop client's.
 - Delete `docs/cyborg-implementation-plan.md`, or move it to `docs/archive/`.
 - Remove `.vscode/` and add it to `.gitignore`.
 
