@@ -34,9 +34,10 @@ Changed, below.
 
 - **A Cyborg sharing a seat no longer carries a stale cashing suit.** Leading a cash sets the suit
   it is cashing, but a lead made by whoever else plays the seat never cleared it. So after the seat
-  changed hands the Cyborg could keep cashing a suit its seat had moved on from. The suit is now
-  cleared by any lead from the seat that the Cyborg did not choose. A Cyborg that plays its own
-  seat throughout chooses every lead, and plays as before.
+  changed hands the Cyborg could keep cashing a suit its seat had moved on from. Now a lead from
+  the seat that the Cyborg did not choose ends the run when it is in another suit; a lead in the
+  suit being cashed carries the run on. A Cyborg that plays its own seat throughout chooses every
+  lead, and plays as before.
 
 ### Changed
 

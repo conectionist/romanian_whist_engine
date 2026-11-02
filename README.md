@@ -840,9 +840,9 @@ This works because of how the two strategies are built:
 - **They read their hand from each decision's context**, not from memory.
 - **Nothing from their own earlier decisions is needed later.** The Reckoner's decisions only read
   what it has watched. The Cyborg's planned lead and the suit it is cashing are cleared at every
-  round start, so after a takeover they are what they would be at the start of a round. The cashing
-  suit is also cleared when the seat leads a card the Cyborg did not choose, so a seat can change
-  hands as often as it likes.
+  round start, so after a takeover they are what they would be at the start of a round. The run
+  also ends when the seat leads another suit with a card the Cyborg did not choose; a lead in the
+  suit being cashed carries it on. So a seat can change hands as often as it likes.
 
 The other four strategies decide from the context alone and need nothing.
 

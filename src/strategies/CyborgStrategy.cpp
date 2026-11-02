@@ -415,9 +415,10 @@ void CyborgStrategy::notePlayed(unsigned int seat, const Card& card)
 {
     if(seat == memory.mySeat)
     {
-        // Read before the memory records the card, while an empty table still means a lead. A
-        // stand-in sharing the seat sees its player's leads only here.
-        if(memory.currentTrickCards.empty() && ownLead != card)
+        // A stand-in sharing the seat sees its player's leads only here. One in another suit ends
+        // the run, and one in the suit being cashed carries it on. The table is read before the
+        // card joins it, while empty still means a lead.
+        if(memory.currentTrickCards.empty() && ownLead != card && cashingSuit != card.suit)
             cashingSuit = std::nullopt;
 
         ownLead.reset();

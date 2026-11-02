@@ -130,7 +130,7 @@ public:
     unsigned int makeBet(const BetContext& context) override
     {
         requireMemoryAgrees(context.hand);
-        requireRunEnded();
+        requireRunAsExpected();
 
         if(!standInDecides(true, context.roundType, 0))
             return own->makeBet(context);
@@ -147,25 +147,22 @@ public:
     std::optional<std::size_t> playCard(const PlayContext& context) override
     {
         requireMemoryAgrees(context.hand);
-        requireRunEnded();
+        requireRunAsExpected();
 
         const bool leading = context.playedCards.empty();
 
         if(!standInDecides(false, engine.getCurrentRoundType(), context.playedCards.size()))
         {
-            if(leading)
-            {
-                if(runState && runState())
-                    runsEndedByOwnLead++;
+            const std::optional<std::size_t> index = own->playCard(context);
 
-                ownPlayerLedLast = true;
-            }
+            if(leading && index)
+                noteOwnLead(context.hand[*index], context.hand.size());
 
-            return own->playCard(context);
+            return index;
         }
 
         if(leading)
-            ownPlayerLedLast = false;
+            expectedRun.reset();
 
         const std::optional<Card> chosen = standIn.getBestChoice(context);
 
@@ -183,13 +180,14 @@ public:
         return static_cast<std::size_t>(std::distance(context.hand.begin(), it));
     }
 
-    // Whether the stand-in is partway through a run of play that a lead of the seat's own
-    // player must end. Checked at each decision after such a lead.
-    std::function<bool()> runState;
+    // The suit the stand-in is part-way through a run of, if any. After a lead by the seat's own
+    // player it must have ended, unless the player led that same suit.
+    std::function<std::optional<Suit>()> runState;
 
     bool tookOver = false;
     unsigned int standInDecisions = 0;
-    unsigned int runsEndedByOwnLead = 0;
+    unsigned int runsEnded = 0;
+    unsigned int runsKept = 0;
 
 private:
     const GameEngine& engine;
@@ -201,12 +199,42 @@ private:
     unsigned int skip;
     bool skipResolved = false;
     std::optional<std::mt19937> sharing;
-    bool ownPlayerLedLast = false;
-
-    void requireRunEnded() const
+    // What the stand-in's run must be at the seat's next decision, set by its player's lead and
+    // dropped by the stand-in's own. A new round clears the run, whatever was led.
+    struct ExpectedRun
     {
-        if(ownPlayerLedLast && runState && runState())
-            FAIL("the stand-in still carries a run of play its seat's own player ended by leading");
+        std::optional<Suit> suit;
+        unsigned int round;
+    };
+
+    std::optional<ExpectedRun> expectedRun;
+
+    void noteOwnLead(const Card& led, std::size_t handSize)
+    {
+        if(!runState)
+            return;
+
+        const std::optional<Suit> run = runState();
+        const bool kept = run && *run == led.suit;
+
+        expectedRun = ExpectedRun{ kept ? run : std::nullopt, engine.getCurrentRoundIndex() };
+
+        // A run is told apart from the round's own reset only if the seat can lead again this round.
+        if(run && handSize > 1)
+            (kept ? runsKept : runsEnded)++;
+    }
+
+    void requireRunAsExpected() const
+    {
+        if(!expectedRun)
+            return;
+
+        const std::optional<Suit> actual = runState();
+        const bool kept = engine.getCurrentRoundIndex() == expectedRun->round && expectedRun->suit;
+        const bool asExpected = kept ? actual && *actual == *expectedRun->suit : !actual;
+
+        if(!asExpected)
+            FAIL("after its seat's player led, the stand-in's run is not what that lead leaves");
     }
 
     bool standInDecides(bool bidding, RoundType roundType, std::size_t cardsOnTable)
@@ -320,7 +348,8 @@ struct StandbyResult
     GameStatus status = GameStatus::NotStarted;
     bool tookOver = false;
     unsigned int standInDecisions = 0;
-    unsigned int runsEndedByOwnLead = 0;
+    unsigned int runsEnded = 0;
+    unsigned int runsKept = 0;
 };
 
 struct StandbyGame
@@ -337,7 +366,7 @@ struct StandbyGame
 // names keep clear of the Reckoner's "LowRisk" and "Ducking" name check.
 template<typename Strategy>
 StandbyResult playWithStandby(Strategy& standIn, const common::RoundMemory& memory, const StandbyGame& game,
-                              std::function<bool()> runState = {})
+                              std::function<std::optional<Suit>()> runState = {})
 {
     GameEngine engine;
 
@@ -357,7 +386,7 @@ StandbyResult playWithStandby(Strategy& standIn, const common::RoundMemory& memo
     engine.start(std::move(setup));
     engine.run();
 
-    return { engine.getStatus(), watch->tookOver, watch->standInDecisions, watch->runsEndedByOwnLead };
+    return { engine.getStatus(), watch->tookOver, watch->standInDecisions, watch->runsEnded, watch->runsKept };
 }
 
 GameStructure structureFor(unsigned int i)
@@ -379,8 +408,7 @@ void requireTakeoverPlayedOut(const StandbyResult& result)
     REQUIRE(result.status == GameStatus::Finished);
 }
 
-// Returns how many cashing runs the seat's own player ended by leading.
-unsigned int runCyborgStandby(const StandbyGame& game)
+StandbyResult runCyborgStandby(const StandbyGame& game)
 {
     INFO(describe("Cyborg", game));
 
@@ -388,7 +416,7 @@ unsigned int runCyborgStandby(const StandbyGame& game)
 
     const StandbyResult result = playWithStandby(standIn, standIn.getMemory(), game, [&standIn]
     {
-        return standIn.getCashingSuit().has_value();
+        return standIn.getCashingSuit();
     });
 
     requireTakeoverPlayedOut(result);
@@ -396,7 +424,7 @@ unsigned int runCyborgStandby(const StandbyGame& game)
     // Zero says its memory agreed with every position it was shown after the takeover.
     REQUIRE(standIn.getFallbacksTaken() == 0);
 
-    return result.runsEndedByOwnLead;
+    return result;
 }
 
 void runReckonerStandby(reckoner::ReckonerPreset preset, const char* presetName, const StandbyGame& game)
@@ -527,19 +555,27 @@ TEST_CASE("Reckoner Gamma and Delta stand-ins take a seat over at any moment and
 }
 
 // A move made for an idle player, then the player again: the seat changes hands many times.
-TEST_CASE("A Cyborg sharing a seat with its player never keeps a run its player ended", "[standby][cyborg]")
+TEST_CASE("A Cyborg sharing a seat with its player ends or keeps its run as the player's lead says",
+          "[standby][cyborg]")
 {
     unsigned int runsEnded = 0;
+    unsigned int runsKept = 0;
 
     for(unsigned int playerCount = 2 ; playerCount <= 6 ; playerCount++)
     {
         for(std::uint32_t seed = 1 ; seed <= 4 ; seed++)
-            runsEnded += runCyborgStandby({ playerCount, seed % playerCount, Moment::Shared, seed * 700 + playerCount,
-                                            structureFor(seed) });
+        {
+            const StandbyResult result = runCyborgStandby({ playerCount, seed % playerCount, Moment::Shared,
+                                                            seed * 700 + playerCount, structureFor(seed) });
+            runsEnded += result.runsEnded;
+            runsKept += result.runsKept;
+        }
     }
 
-    // Without a run for the player to end, the check at each decision would test nothing.
+    // Each kind of lead has to come up, or the check at each decision would not test it.
+    INFO("runs ended " << runsEnded << ", runs kept " << runsKept);
     REQUIRE(runsEnded > 0);
+    REQUIRE(runsKept > 0);
 }
 
 TEST_CASE("A Reckoner sharing a seat with its player plays the game out", "[standby][reckoner]")
