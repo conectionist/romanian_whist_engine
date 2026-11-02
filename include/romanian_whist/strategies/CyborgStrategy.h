@@ -139,12 +139,13 @@ private:
     PlayDecision cyborgPlay(const PlayContext& context, const std::vector<Card>& legal,
                             common::Mask myHand) const;
 
-    // Updates the cashing suit from a card this seat is about to play. `cashing`
-    // says whether that card was chosen as a cash; a lead that was not one ends
-    // the run, so it clears the suit rather than leaving it to mislead §6.1.
+    // Takes every card this seat is about to play. A lead is kept as ownLead, and a lead that
+    // was not a cash ends the run, so the suit cannot mislead §6.1. Every lead must come through,
+    // or notePlayed() takes one of the Cyborg's own leads for its player's.
     void noteLead(const PlayContext& context, const Card& played, bool cashing);
 
-    // Records a card in the memory. Both onCardPlayed() overloads come through here.
+    // The one way a card reaches the memory, so a lead the Cyborg did not choose ends or keeps its
+    // run whichever onCardPlayed() overload brings it.
     void notePlayed(unsigned int seat, const Card& card);
 };
 

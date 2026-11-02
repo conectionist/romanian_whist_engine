@@ -372,6 +372,7 @@ void CyborgStrategy::onRoundStarted(const GameEngine& engine)
 {
     plannedLead = std::nullopt;
     cashingSuit = std::nullopt;
+    ownLead = std::nullopt;
     memory.initRound(engine.getPlayerCount(), engine.getCurrentRoundTrickCount(),
                      mySeat ? mySeat->index : 0, engine.getRoundLeaderSeat().index,
                      engine.getCurrentTrumpCard());
@@ -398,6 +399,7 @@ void CyborgStrategy::onRoundStart(unsigned int n, unsigned int r, std::optional<
 {
     plannedLead = std::nullopt;
     cashingSuit = std::nullopt;
+    ownLead = std::nullopt;
     memory.initRound(n, r, mySeatIdx, openerSeat, trump);
 }
 

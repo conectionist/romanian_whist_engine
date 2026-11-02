@@ -291,8 +291,8 @@ private:
         if(tookOver || !isDue(bidding, roundType, cardsOnTable))
             return;
 
-        // The draw for any decision covers the whole game, which the schedule gives only once the
-        // game has started.
+        // The game's length is known only once it has started, so that is when the draw for any
+        // decision is fitted to it.
         if(moment == Moment::Any && !skipResolved)
         {
             skip %= decisionsInGame();
@@ -311,7 +311,7 @@ private:
 
 // How many chances to let pass before taking over, below what every table offers: even at six
 // seats a seat opens five rounds. A mid-round lead needs a trick won first, and the Forehead and
-// Hidden rounds come once each. Any decision is drawn in full and reduced once the game starts.
+// Hidden rounds come once each, so those three take the first chance.
 unsigned int skipFor(Moment moment, std::uint32_t seed)
 {
     std::mt19937 generator(seed);
@@ -394,9 +394,9 @@ GameStructure structureFor(unsigned int i)
     return i % 2 == 0 ? GameStructure::S_181 : GameStructure::S_818;
 }
 
-std::string describe(const char* strategy, const StandbyGame& game)
+std::string describe(const std::string& strategy, const StandbyGame& game)
 {
-    return std::string(strategy) + ", players = " + std::to_string(game.playerCount) + ", seat "
+    return strategy + ", players = " + std::to_string(game.playerCount) + ", seat "
            + std::to_string(game.seat) + ", taking over at " + nameOf(game.moment) + ", seed = "
            + std::to_string(game.seed) + (game.structure == GameStructure::S_818 ? ", S_818" : ", S_181");
 }
@@ -429,7 +429,7 @@ StandbyResult runCyborgStandby(const StandbyGame& game)
 
 void runReckonerStandby(reckoner::ReckonerPreset preset, const char* presetName, const StandbyGame& game)
 {
-    INFO(describe(presetName, game));
+    INFO(describe(std::string("Reckoner ") + presetName, game));
 
     ReckonerStrategy standIn(preset, game.seed);
 
@@ -582,7 +582,7 @@ TEST_CASE("A Reckoner sharing a seat with its player plays the game out", "[stan
 {
     for(unsigned int playerCount = 2 ; playerCount <= 6 ; playerCount++)
         runReckonerStandby(reckoner::ReckonerPreset::Alpha, "Alpha",
-                           { playerCount, (playerCount + 1) % playerCount, Moment::Shared, 800 + playerCount,
+                           { playerCount, playerCount / 2, Moment::Shared, 800 + playerCount,
                              structureFor(playerCount) });
 
     runReckonerStandby(reckoner::ReckonerPreset::Beta, "Beta", { 4, 2, Moment::Shared, 900, GameStructure::S_181 });
