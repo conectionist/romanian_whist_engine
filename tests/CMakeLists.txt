@@ -14,6 +14,7 @@ add_executable(romanian_whist_engine_tests
     DeckTests.cpp
     GameEngineTests.cpp
     ObserverTests.cpp
+    SnapshotTests.cpp
     ScoreboardTests.cpp
     TrickTests.cpp
     GoldenGameTests.cpp
@@ -39,6 +40,7 @@ add_executable(romanian_whist_engine_tests
     ReckonerStrategyTests.cpp
     ReckonerTournamentTests.cpp
     ReckonerRobustnessTests.cpp
+    StandbyTests.cpp
 )
 
 target_link_libraries(romanian_whist_engine_tests PRIVATE

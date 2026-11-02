@@ -3,7 +3,42 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
-## Unreleased
+## 5.1.0
+
+**A snapshot of the game for one viewer, a promise about stand-ins, and a new license.** The first
+two are additions, and no existing call changes. Keeping the promise took one fix: a Cyborg sharing
+a seat changes how it plays (see Fixed). The license is now the AGPL-3.0-or-later: see Changed,
+below.
+
+### Added
+
+- **`<romanian_whist/Snapshot.h>`: `GameSnapshot` and `snapshotFrom(engine, viewer)`.** A copy of
+  the game state a client renders, by value, for another thread or another machine.
+  - The viewer is a required parameter. A seat's hand is in the snapshot only when `canSeeHand()`
+    lets that viewer see it, and `std::nullopt`, a spectator, sees none.
+  - A hand the viewer may not see is absent rather than flagged hidden, so a serialiser has
+    nothing to leak.
+  - `ledBy` comes from the trick's first card, because `getTrickLeaderSeat()` has already moved
+    to the winner by `onTrickWon()`.
+  - The README's new section "Snapshots for another thread or another machine" describes it.
+- **A strategy can stand in for a seat it does not play.** A `CyborgStrategy` or
+  `ReckonerStrategy` given a seat with `setSeat()`, and registered as an observer before
+  `start()`, can be asked for a bid or a card at any point, including partway through a round in
+  which it made none of that seat's decisions.
+  - The code already allowed this. It is now documented, in the README's "A strategy for a seat
+    it does not play" and on `ReckonerStrategy::setSeat()`, and it is tested by
+    `tests/StandbyTests.cpp`.
+  - That section also notes that the Reckoner treats any seat whose name contains `LowRisk` or
+    `Ducking` as deterministic, whoever plays it.
+
+### Fixed
+
+- **A Cyborg sharing a seat no longer carries a stale cashing suit.** Leading a cash sets the suit
+  it is cashing, but a lead made by whoever else plays the seat never cleared it. So after the seat
+  changed hands the Cyborg could keep cashing a suit its seat had moved on from. Now a lead from
+  the seat that the Cyborg did not choose ends the run when it is in another suit; a lead in the
+  suit being cashed carries the run on. A Cyborg that plays its own seat throughout chooses every
+  lead, and plays as before.
 
 ### Changed
 

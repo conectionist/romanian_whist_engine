@@ -273,6 +273,8 @@ void CyborgStrategy::noteLead(const PlayContext& context, const Card& played, bo
     if(!context.playedCards.empty())
         return;
 
+    ownLead = played;
+
     // A lead that was not a cash ENDS the run: once this hand leads something
     // else, there is no suit it is part-way through. Leaving the old suit in
     // place is what let a junk lead redirect a later TAKE lead away from §6.1's
@@ -370,6 +372,7 @@ void CyborgStrategy::onRoundStarted(const GameEngine& engine)
 {
     plannedLead = std::nullopt;
     cashingSuit = std::nullopt;
+    ownLead = std::nullopt;
     memory.initRound(engine.getPlayerCount(), engine.getCurrentRoundTrickCount(),
                      mySeat ? mySeat->index : 0, engine.getRoundLeaderSeat().index,
                      engine.getCurrentTrumpCard());
@@ -382,7 +385,7 @@ void CyborgStrategy::onBetPlaced(const GameEngine& /*engine*/, Seat seat, unsign
 
 void CyborgStrategy::onCardPlayed(const GameEngine& /*engine*/, Seat seat, const Card& card)
 {
-    memory.recordCardPlayed(seat.index, card);
+    notePlayed(seat.index, card);
 }
 
 void CyborgStrategy::onTrickWon(const GameEngine& /*engine*/, Seat winner,
@@ -396,6 +399,7 @@ void CyborgStrategy::onRoundStart(unsigned int n, unsigned int r, std::optional<
 {
     plannedLead = std::nullopt;
     cashingSuit = std::nullopt;
+    ownLead = std::nullopt;
     memory.initRound(n, r, mySeatIdx, openerSeat, trump);
 }
 
@@ -406,6 +410,22 @@ void CyborgStrategy::onBid(unsigned int seat, unsigned int value)
 
 void CyborgStrategy::onCardPlayed(unsigned int seat, const Card& card)
 {
+    notePlayed(seat, card);
+}
+
+void CyborgStrategy::notePlayed(unsigned int seat, const Card& card)
+{
+    if(seat == memory.mySeat)
+    {
+        // A stand-in sharing the seat sees its player's leads only here. One in another suit ends
+        // the run, and one in the suit being cashed carries it on. The table is read before the
+        // card joins it, while empty still means a lead.
+        if(memory.currentTrickCards.empty() && ownLead != card && cashingSuit != card.suit)
+            cashingSuit = std::nullopt;
+
+        ownLead.reset();
+    }
+
     memory.recordCardPlayed(seat, card);
 }
 

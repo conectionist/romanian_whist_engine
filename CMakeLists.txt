@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(RomanianWhistEngine
-    VERSION 5.0.0
+    VERSION 5.1.0
     DESCRIPTION "Reusable Romanian Whist game engine"
     LANGUAGES CXX)
 
@@ -15,6 +15,7 @@ add_library(romanian_whist_engine STATIC
     src/Round.cpp
     src/Scoreboard.cpp
     src/GameEngine.cpp
+    src/Snapshot.cpp
     src/AiMoveProvider.cpp
     src/detail/RandomDraw.cpp
     src/strategies/FirstCardStrategy.cpp
