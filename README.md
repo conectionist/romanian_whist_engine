@@ -771,6 +771,50 @@ the index the engine wants is `AiMoveProvider`'s job.
 See **[docs/STRATEGIES.md](docs/STRATEGIES.md)** for how each one decides, how they score against
 each other, and where they fall down.
 
+### A strategy for a seat it does not play
+
+A Cyborg or a Reckoner can watch a seat that something else is playing, and take that seat over at
+any point: during bidding, at a trick's lead, partway through a trick, in a Forehead or a Hidden
+round. That is how a server replaces a player who drops out: the seat's computer player has watched
+every deal, and decides only once the human is gone.
+
+```cpp
+CyborgStrategy standIn;            // an observer, so it must outlive the engine
+standIn.setSeat(Seat{2});          // the seat it watches; its name is never consulted
+engine.addObserver(&standIn);      // before start(), so it sees the first deal
+
+// Later, in seat 2's own move provider, once the human has gone:
+return standIn.getBestBet(context);
+```
+
+`getBestChoice()` returns a card, so a provider asking it for a play turns the card into its index in
+`context.hand`, as `AiMoveProvider` does.
+
+This works because of how the two strategies are built:
+
+- **They learn the game only through the observer callbacks.** A bid or a card the seat's human
+  made reaches the stand-in exactly as one it had made itself would.
+- **They read their hand from each decision's context**, not from memory.
+- **Nothing from their own earlier decisions is needed later.** The Cyborg's planned lead and the
+  suit it is cashing are cleared at every round start, so after a takeover they are what they would
+  be at the start of a round. The Reckoner's decisions only read what it has watched.
+
+The other four strategies decide from the context alone and need nothing.
+
+`tests/StandbyTests.cpp` holds the engine to this. A stand-in takes a seat over at each kind of
+moment, at every table size, and plays the game out. In every game:
+
+- every answer is legal;
+- the stand-in's memory agrees with the engine at every one of the seat's decisions;
+- the Cyborg never falls back to its heuristics.
+
+A stand-in that takes over at the seat's first decision plays exactly the game the same strategy
+plays when seated by `makeCyborgSeat()` or `makeReckonerSeat()`.
+
+One caveat: the Reckoner treats any seat whose name contains `LowRisk` or `Ducking` as a
+deterministic player, whoever sits in it, and `setSeat()` does not change that. A server should not
+let a human take such a name.
+
 ---
 
 ## Upgrading from 3.x

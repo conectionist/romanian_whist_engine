@@ -32,6 +32,9 @@ public:
     explicit ReckonerStrategy(reckoner::ReckonerPreset preset,
                              std::optional<std::uint32_t> seed = std::nullopt);
 
+    // Normally resolved from the player name inside onGameStarted(). Call this before
+    // GameEngine::start() to set it explicitly instead - which is also the way to register a
+    // Reckoner that is watching a seat it does not occupy.
     void setSeat(Seat seat);
     void setPlayerName(const std::string& name);
     const reckoner::ReckonerTracker& getTracker() const;
