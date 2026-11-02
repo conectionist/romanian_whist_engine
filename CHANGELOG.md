@@ -5,8 +5,9 @@ This project follows [Semantic Versioning](https://semver.org/). The version liv
 
 ## 5.1.0
 
-**A snapshot of the game for one viewer, and a promise about stand-ins.** Both are additions; no
-existing call changes.
+**A snapshot of the game for one viewer, a promise about stand-ins, and a new license.** The first
+two are additions, and no existing call changes. The license is now the AGPL-3.0-or-later: see
+Changed, below.
 
 ### Added
 

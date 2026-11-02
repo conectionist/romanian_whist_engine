@@ -1,5 +1,5 @@
-#ifndef SNAPSHOT_H
-#define SNAPSHOT_H
+#ifndef ROMANIAN_WHIST_SNAPSHOT_H
+#define ROMANIAN_WHIST_SNAPSHOT_H
 
 #include <romanian_whist/Card.h>
 #include <romanian_whist/GameEngine.h>
@@ -53,12 +53,12 @@ struct GameSnapshot
     GameStatus status = GameStatus::NotStarted;
     GamePhase phase = GamePhase::NotStarted;
 
-    // 0-based, as getCurrentRoundIndex().
+    // 0-based. At onRoundComplete() it already names the next round, except after the last.
     unsigned int roundIndex = 0;
     unsigned int roundCount = 0;
     unsigned int trickCount = 0;
 
-    // 1-based; 0 between the deal and the first trick.
+    // 1-based; 0 until the round's first trick starts.
     unsigned int trickNumber = 0;
 
     RoundType roundType = RoundType::Normal;
@@ -75,8 +75,8 @@ struct GameSnapshot
     // Public: anyone can work it out from the bids.
     std::optional<unsigned int> forbiddenBet;
 
-    // The cards on the table, in the order they were played. Inside onTrickWon() and
-    // onRoundScored() this is still the finished trick.
+    // The cards on the table, in the order they were played. A finished trick stays here until
+    // the next trick starts or the game moves on to the next round.
     std::vector<PlayedCard> table;
 
     // The engine's own ranking of the cards on the table; empty while there are none.
@@ -95,9 +95,8 @@ struct GameSnapshot
 };
 
 // The viewer has no default, so a snapshot built without deciding who will see it cannot be
-// written. Call it on the thread running the game, as with any read of the engine.
-//
-// Throws std::logic_error before start(), and std::out_of_range for a viewer not at the table.
+// written. Call it on the thread running the game. Throws std::logic_error before start(), and
+// std::out_of_range for a viewer not at the table.
 GameSnapshot snapshotFrom(const GameEngine& engine, std::optional<Seat> viewer);
 
 } // namespace romanian_whist

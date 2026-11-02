@@ -655,6 +655,7 @@ own the loop, and it is only a cost if your UI lives somewhere else.
 **If your UI is not on the game thread, snapshot inside the callback:**
 
 ```cpp
+// viewer: a member, the seat this window shows, or std::nullopt to watch.
 void onCardPlayed(const GameEngine& engine, Seat, const Card&) override
 {
     GameSnapshot snapshot = snapshotFrom(engine, viewer);   // still on the game thread

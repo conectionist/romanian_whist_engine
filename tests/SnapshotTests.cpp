@@ -300,11 +300,16 @@ struct PinnedCapture : IGameObserver
     }
 };
 
-PinnedCapture playPinnedGame()
+// One seeded game, four seats, S_181, ending with a Forehead and a Hidden round, played once for
+// every pinned test.
+const PinnedCapture& pinnedGame()
 {
-    PinnedCapture capture;
-
-    playFullGame(GameStructure::S_181, buildRoundRobinProviders(4), 42, { &capture }, true, false);
+    static const PinnedCapture capture = []
+    {
+        PinnedCapture played;
+        playFullGame(GameStructure::S_181, buildRoundRobinProviders(4), 42, { &played }, true, false);
+        return played;
+    }();
 
     return capture;
 }
@@ -431,14 +436,13 @@ void requireSpectatorMatches(const Frame& frame)
 }
 }
 
-// One seeded game, four seats, S_181, ending with a Forehead and a Hidden round. The round-robin
-// strategies are the ones GoldenGameTests pins on every CI toolchain, so these values hold on all
-// three. The first 24 rounds are that file's 4-player S_181 game, which is why the totals going
-// into the Forehead round are its final scores.
+// The round-robin strategies are the ones GoldenGameTests pins on every CI toolchain. The first 24
+// rounds are its 4-player S_181 game, so the totals going into the Forehead round are its final
+// scores.
 
 TEST_CASE("Pinned snapshot: before the first deal", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.atStart);
     requireSpectatorMatches(*capture.atStart);
 
@@ -455,7 +459,7 @@ TEST_CASE("Pinned snapshot: before the first deal", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: the first deal", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.firstDealt);
     requireSpectatorMatches(*capture.firstDealt);
 
@@ -471,7 +475,7 @@ TEST_CASE("Pinned snapshot: the first deal", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: mid-bidding", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.midBidding);
     requireSpectatorMatches(*capture.midBidding);
 
@@ -488,7 +492,7 @@ TEST_CASE("Pinned snapshot: mid-bidding", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: mid-trick", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.midTrick);
     requireSpectatorMatches(*capture.midTrick);
 
@@ -505,7 +509,7 @@ TEST_CASE("Pinned snapshot: mid-trick", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: inside onTrickWon", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.trickWon);
     requireSpectatorMatches(*capture.trickWon);
 
@@ -523,7 +527,7 @@ TEST_CASE("Pinned snapshot: inside onTrickWon", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: a Forehead deal", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.foreheadDealt);
 
     // Seat 1 sees every card but its own.
@@ -539,7 +543,7 @@ TEST_CASE("Pinned snapshot: a Forehead deal", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: the last round scored", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.lastScored);
     requireSpectatorMatches(*capture.lastScored);
 
@@ -557,7 +561,7 @@ TEST_CASE("Pinned snapshot: the last round scored", "[snapshot]")
 
 TEST_CASE("Pinned snapshot: game over", "[snapshot]")
 {
-    const PinnedCapture capture = playPinnedGame();
+    const PinnedCapture& capture = pinnedGame();
     REQUIRE(capture.gameOver);
     requireSpectatorMatches(*capture.gameOver);
 

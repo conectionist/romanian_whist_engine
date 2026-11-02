@@ -55,10 +55,9 @@ const char* nameOf(Moment moment)
 constexpr Moment kEveryMoment[] = { Moment::Bid, Moment::RoundLead, Moment::MidRoundLead, Moment::Follow,
                                     Moment::ForeheadBid, Moment::HiddenBid, Moment::Any };
 
-// What is wrong with a strategy's memory of the round, measured against the engine at the
-// moment `seat` is asked to decide, or an empty string. The test's own version of the check
-// the Cyborg makes before it trusts its memory, so it covers the Reckoner too, which has no
-// counter to read.
+// What is wrong with a strategy's memory of the round when `seat` is asked to decide, or an empty
+// string. The Cyborg makes a check like this before it trusts its memory; this one covers the
+// Reckoner too, which has no fallback counter to read.
 std::string memoryProblem(const common::RoundMemory& memory, const GameEngine& engine, Seat seat,
                           const std::vector<Card>& hand)
 {
@@ -218,10 +217,9 @@ private:
     }
 };
 
-// How many of the moment's chances to let pass before taking over. Each range stays below what
-// every table is sure to offer: the opener moves one seat a round, so even at six seats a seat
-// opens five rounds. A mid-round lead needs the seat to have won a trick, and the Forehead and
-// Hidden rounds come once each, so those take the first chance.
+// How many chances to let pass before taking over, below what every table offers: even at six
+// seats a seat opens five rounds. A mid-round lead needs a trick won first, and the Forehead and
+// Hidden rounds come once each, so those three take the first chance.
 unsigned int skipFor(Moment moment, std::uint32_t seed)
 {
     std::mt19937 generator(seed);
