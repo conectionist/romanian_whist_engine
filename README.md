@@ -89,10 +89,10 @@ Releases are tagged, so pin one rather than tracking a branch:
 ```bash
 cd libs/RomanianWhistEngine
 git fetch --tags
-git checkout v5.0.0
+git checkout v5.1.0
 cd ../..
 git add libs/RomanianWhistEngine
-git commit -m "Update Romanian Whist engine to 5.0.0"
+git commit -m "Update Romanian Whist engine to 5.1.0"
 ```
 
 `git pull origin master` also works if you would rather track the tip. Either way, read
@@ -623,6 +623,11 @@ engine**. `canSeeHand()` cannot do that, and does not claim to. One serializer t
 makes an invisible card inexpressible **in your backend**, which is the boundary you control.
 Write it once, then `grep -n "getHand()" src/` and check that function is the only hit.
 
+The engine has that function: `snapshotFrom(engine, viewer)` reads every hand through
+`canSeeHand()` (see [Snapshots for another thread or another
+machine](#snapshots-for-another-thread-or-another-machine)). A backend that builds its payloads from
+snapshots needs no `getHand()` call of its own.
+
 The rule is broader than the special rounds: in a Normal round a backend must already send seat A
 only A's cards. Forehead merely inverts it. A spectator is not a seat, so "a spectator sees
 everything" stays your policy and simply does not consult `canSeeHand()`.
@@ -652,8 +657,8 @@ own the loop, and it is only a cost if your UI lives somewhere else.
 ```cpp
 void onCardPlayed(const GameEngine& engine, Seat, const Card&) override
 {
-    GameSnapshot snapshot = snapshotFrom(engine);   // still on the game thread
-    emit stateChanged(snapshot);                    // queued; the GUI thread gets a copy
+    GameSnapshot snapshot = snapshotFrom(engine, viewer);   // still on the game thread
+    emit stateChanged(snapshot);                            // queued; the GUI thread gets a copy
 }
 ```
 
@@ -663,6 +668,42 @@ half-removed, a vector resized under a loop. The Qt client's
 [QT_CLIENT_PLAN.md](https://github.com/conectionist/romanian_whist_desktop/blob/master/docs/QT_CLIENT_PLAN.md) §3–4 works this out end to end: engine on a worker thread, observer snapshots and emits queued signals, move
 provider parked on a condition variable until a click. A web backend is the same shape with an
 HTTP request in place of the click, at the cost of one parked thread per game in progress.
+
+### Snapshots for another thread or another machine
+
+`<romanian_whist/Snapshot.h>` provides that snapshot:
+
+```cpp
+GameSnapshot snapshotFrom(const GameEngine& engine, std::optional<Seat> viewer);
+```
+
+A `GameSnapshot` holds:
+
+- the round, its type and trump, and whose turn it is;
+- the forbidden bid;
+- the cards on the table, and the seat whose card is winning by the engine's own ranking;
+- for each seat: its name, bid, tricks won, cards left, scores and streaks.
+
+It is plain data, copyable and default-constructible, so it can cross to another thread as a queued
+signal, or be serialised for another machine. Call it on the game thread, as any read of the engine
+must be.
+
+- **The viewer has no default.** A snapshot built without deciding who will see it cannot be
+  written.
+  - A seat's `hand` is filled in only when `canSeeHand(viewer, seat)` allows it.
+  - `std::nullopt` is a spectator, who sees no hand at all.
+- **A hand the viewer may not see is absent, not flagged hidden.**
+  - `SeatSnapshot::hand` is an `optional`. It is empty when the viewer may not see that hand, and
+    an empty *vector* when they may see it but it holds no cards, before the deal or once every
+    card is played.
+  - A serialiser that forgets to check has nothing to leak.
+  - `cardsLeft` is always there, so the backs can still be drawn.
+- **`ledBy` is the seat that led the cards on the table**, read from the trick's first card. It is
+  not `getTrickLeaderSeat()`: by `onTrickWon()`, the moment a client draws the finished trick, that
+  has already moved to the winner.
+- **It leaves out what the engine does not model:** display order, wording, which seats are human,
+  portraits. Hands are in the engine's order. A client that sorts one for display maps a click back
+  to the engine's index.
 
 ### Stopping a game
 
@@ -834,6 +875,7 @@ include/romanian_whist/     public headers — this is the include root
 ├── BetContext.h            what IMoveProvider::makeBet is handed
 ├── PlayContext.h           what IMoveProvider::playCard is handed
 ├── Seat.h                  how the engine names a player
+├── Snapshot.h              the game as one viewer may see it, by value
 ├── Card.h                  Rank, Suit, Card
 ├── RoundType.h             Normal / Forehead / Hidden
 ├── Round.h                 one round: bets, tricks, trump, type
