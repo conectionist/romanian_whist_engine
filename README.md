@@ -626,7 +626,8 @@ Write it once, then `grep -n "getHand()" src/` and check that function is the on
 The engine has that function: `snapshotFrom(engine, viewer)` reads every hand through
 `canSeeHand()` (see [Snapshots for another thread or another
 machine](#snapshots-for-another-thread-or-another-machine)). A backend that builds its payloads from
-snapshots needs no `getHand()` call of its own.
+snapshots needs no `getHand()` call of its own, unless it shows a spectator more than
+`snapshotFrom(engine, std::nullopt)` does, which is no hand at all.
 
 The rule is broader than the special rounds: in a Normal round a backend must already send seat A
 only A's cards. Forehead merely inverts it. A spectator is not a seat, so "a spectator sees
@@ -837,14 +838,22 @@ This works because of how the two strategies are built:
 - **They learn the game only through the observer callbacks.** A bid or a card the seat's human
   made reaches the stand-in exactly as one it had made itself would.
 - **They read their hand from each decision's context**, not from memory.
-- **Nothing from their own earlier decisions is needed later.** The Cyborg's planned lead and the
-  suit it is cashing are cleared at every round start, so after a takeover they are what they would
-  be at the start of a round. The Reckoner's decisions only read what it has watched.
+- **Nothing from their own earlier decisions is needed later.** The Reckoner's decisions only read
+  what it has watched. The Cyborg's planned lead and the suit it is cashing are cleared at every
+  round start, so after a takeover they are what they would be at the start of a round. The cashing
+  suit is also cleared when the seat leads a card the Cyborg did not choose, so a seat can change
+  hands as often as it likes.
 
 The other four strategies decide from the context alone and need nothing.
 
-`tests/StandbyTests.cpp` holds the engine to this. A stand-in takes a seat over at each kind of
-moment, at every table size, and plays the game out. In every game:
+`tests/StandbyTests.cpp` holds the engine to this:
+
+- A stand-in takes a seat over at each kind of moment, early or late in the game, and plays the
+  game out. The Cyborg and Reckoner Alpha do this at every table size; the slower presets do it at
+  fewer sizes.
+- In other games the seat is shared: the stand-in makes one decision in three.
+
+In every game:
 
 - every answer is legal;
 - the stand-in's memory agrees with the engine at every one of the seat's decisions;

@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -33,7 +34,9 @@ enum class Moment
     Follow,         // a card with others already on the table
     ForeheadBid,
     HiddenBid,
-    Any             // any decision of the game
+    Any,            // any decision of the game, late ones included
+    First,          // the seat's first decision
+    Shared          // one decision in three, and the seat's own player takes the rest
 };
 
 const char* nameOf(Moment moment)
@@ -47,6 +50,8 @@ const char* nameOf(Moment moment)
         case Moment::ForeheadBid:  return "a Forehead bid";
         case Moment::HiddenBid:    return "a Hidden bid";
         case Moment::Any:          return "any decision";
+        case Moment::First:        return "the first decision";
+        case Moment::Shared:       return "one decision in three";
     }
 
     return "?";
@@ -113,24 +118,21 @@ std::string memoryProblem(const common::RoundMemory& memory, const GameEngine& e
 }
 
 // Plays one seat with its own provider until the moment comes, then asks the stand-in for every
-// later decision. The stand-in has watched the whole game, and its memory is checked at every
-// one of the seat's decisions, before the takeover as well as after.
+// later decision, or for one in three when the seat is shared. The stand-in's memory is checked
+// at every one of the seat's decisions, whoever makes it.
 class StandbyProvider : public IMoveProvider
 {
 public:
     StandbyProvider(const GameEngine& _engine, Seat _seat, std::unique_ptr<IMoveProvider> _own,
                     IStrategy& _standIn, const common::RoundMemory& _memory, Moment _moment,
-                    unsigned int _skip)
-        : engine(_engine), seat(_seat), own(std::move(_own)), standIn(_standIn), memory(_memory),
-          moment(_moment), skip(_skip)
-    {}
+                    std::uint32_t seed);
 
     unsigned int makeBet(const BetContext& context) override
     {
         requireMemoryAgrees(context.hand);
-        takeOverIfDue(true, context.roundType, 0);
+        requireRunEnded();
 
-        if(!tookOver)
+        if(!standInDecides(true, context.roundType, 0))
             return own->makeBet(context);
 
         const unsigned int bet = standIn.getBestBet(context);
@@ -145,10 +147,25 @@ public:
     std::optional<std::size_t> playCard(const PlayContext& context) override
     {
         requireMemoryAgrees(context.hand);
-        takeOverIfDue(false, engine.getCurrentRoundType(), context.playedCards.size());
+        requireRunEnded();
 
-        if(!tookOver)
+        const bool leading = context.playedCards.empty();
+
+        if(!standInDecides(false, engine.getCurrentRoundType(), context.playedCards.size()))
+        {
+            if(leading)
+            {
+                if(runState && runState())
+                    runsEndedByOwnLead++;
+
+                ownPlayerLedLast = true;
+            }
+
             return own->playCard(context);
+        }
+
+        if(leading)
+            ownPlayerLedLast = false;
 
         const std::optional<Card> chosen = standIn.getBestChoice(context);
 
@@ -166,8 +183,13 @@ public:
         return static_cast<std::size_t>(std::distance(context.hand.begin(), it));
     }
 
+    // Whether the stand-in is partway through a run of play that a lead of the seat's own
+    // player must end. Checked at each decision after such a lead.
+    std::function<bool()> runState;
+
     bool tookOver = false;
     unsigned int standInDecisions = 0;
+    unsigned int runsEndedByOwnLead = 0;
 
 private:
     const GameEngine& engine;
@@ -177,6 +199,38 @@ private:
     const common::RoundMemory& memory;
     Moment moment;
     unsigned int skip;
+    bool skipResolved = false;
+    std::optional<std::mt19937> sharing;
+    bool ownPlayerLedLast = false;
+
+    void requireRunEnded() const
+    {
+        if(ownPlayerLedLast && runState && runState())
+            FAIL("the stand-in still carries a run of play its seat's own player ended by leading");
+    }
+
+    bool standInDecides(bool bidding, RoundType roundType, std::size_t cardsOnTable)
+    {
+        if(!sharing)
+        {
+            takeOverIfDue(bidding, roundType, cardsOnTable);
+            return tookOver;
+        }
+
+        const bool decides = (*sharing)() % 3 == 0;
+        tookOver = tookOver || decides;
+        return decides;
+    }
+
+    unsigned int decisionsInGame() const
+    {
+        unsigned int decisions = 0;
+
+        for(unsigned int i = 0 ; i < engine.getRoundCount() ; i++)
+            decisions += 1 + engine.getRound(i).getTrickCount();
+
+        return decisions;
+    }
 
     void requireMemoryAgrees(const std::vector<Card>& hand) const
     {
@@ -197,6 +251,8 @@ private:
             case Moment::ForeheadBid:  return bidding && roundType == RoundType::Forehead;
             case Moment::HiddenBid:    return bidding && roundType == RoundType::Hidden;
             case Moment::Any:          return true;
+            case Moment::First:        return true;
+            case Moment::Shared:       return true;
         }
 
         return false;
@@ -206,6 +262,14 @@ private:
     {
         if(tookOver || !isDue(bidding, roundType, cardsOnTable))
             return;
+
+        // The draw for any decision covers the whole game, which the schedule gives only once the
+        // game has started.
+        if(moment == Moment::Any && !skipResolved)
+        {
+            skip %= decisionsInGame();
+            skipResolved = true;
+        }
 
         if(skip > 0)
         {
@@ -219,7 +283,7 @@ private:
 
 // How many chances to let pass before taking over, below what every table offers: even at six
 // seats a seat opens five rounds. A mid-round lead needs a trick won first, and the Forehead and
-// Hidden rounds come once each, so those three take the first chance.
+// Hidden rounds come once each. Any decision is drawn in full and reduced once the game starts.
 unsigned int skipFor(Moment moment, std::uint32_t seed)
 {
     std::mt19937 generator(seed);
@@ -229,14 +293,26 @@ unsigned int skipFor(Moment moment, std::uint32_t seed)
         case Moment::Bid:       return generator() % 10;
         case Moment::RoundLead: return generator() % 4;
         case Moment::Follow:    return generator() % 10;
-        case Moment::Any:       return generator() % 60;
+        case Moment::Any:       return generator();
         case Moment::MidRoundLead:
         case Moment::ForeheadBid:
         case Moment::HiddenBid:
+        case Moment::First:
+        case Moment::Shared:
             return 0;
     }
 
     return 0;
+}
+
+StandbyProvider::StandbyProvider(const GameEngine& _engine, Seat _seat, std::unique_ptr<IMoveProvider> _own,
+                                 IStrategy& _standIn, const common::RoundMemory& _memory, Moment _moment,
+                                 std::uint32_t seed)
+    : engine(_engine), seat(_seat), own(std::move(_own)), standIn(_standIn), memory(_memory),
+      moment(_moment), skip(skipFor(_moment, seed))
+{
+    if(moment == Moment::Shared)
+        sharing.emplace(seed);
 }
 
 struct StandbyResult
@@ -244,34 +320,56 @@ struct StandbyResult
     GameStatus status = GameStatus::NotStarted;
     bool tookOver = false;
     unsigned int standInDecisions = 0;
+    unsigned int runsEndedByOwnLead = 0;
 };
 
-// `seat` is played by a seeded random player while `standIn` watches it, and the stand-in takes
-// it over at the chosen moment. The other seats are the round-robin strategies, whose P0..Pn
+struct StandbyGame
+{
+    unsigned int playerCount;
+    unsigned int seat;
+    Moment moment;
+    std::uint32_t seed;
+    GameStructure structure;
+};
+
+// The seat is played by a seeded random player while `standIn` watches it, and the stand-in
+// takes it over at the chosen moment. The other seats are the round-robin strategies, whose P0..Pn
 // names keep clear of the Reckoner's "LowRisk" and "Ducking" name check.
 template<typename Strategy>
-StandbyResult playWithStandby(Strategy& standIn, const common::RoundMemory& memory,
-                              unsigned int playerCount, unsigned int seat, Moment moment,
-                              std::uint32_t seed)
+StandbyResult playWithStandby(Strategy& standIn, const common::RoundMemory& memory, const StandbyGame& game,
+                              std::function<bool()> runState = {})
 {
     GameEngine engine;
 
-    standIn.setSeat(Seat{seat});
+    standIn.setSeat(Seat{game.seat});
     engine.addObserver(&standIn);
 
-    GameSetup setup = buildSetup(GameStructure::S_181, buildRoundRobinProviders(playerCount), seed, true, false);
+    GameSetup setup = buildSetup(game.structure, buildRoundRobinProviders(game.playerCount), game.seed, true, false);
 
-    auto own = std::make_unique<AiMoveProvider>(std::make_unique<RandomCardStrategy>(seed));
-    auto provider = std::make_unique<StandbyProvider>(engine, Seat{seat}, std::move(own), standIn, memory,
-                                                      moment, skipFor(moment, seed));
+    auto own = std::make_unique<AiMoveProvider>(std::make_unique<RandomCardStrategy>(game.seed));
+    auto provider = std::make_unique<StandbyProvider>(engine, Seat{game.seat}, std::move(own), standIn, memory,
+                                                      game.moment, game.seed);
+    provider->runState = std::move(runState);
     const StandbyProvider* watch = provider.get();
 
-    setup.seats[seat].moveProvider = std::move(provider);
+    setup.seats[game.seat].moveProvider = std::move(provider);
 
     engine.start(std::move(setup));
     engine.run();
 
-    return { engine.getStatus(), watch->tookOver, watch->standInDecisions };
+    return { engine.getStatus(), watch->tookOver, watch->standInDecisions, watch->runsEndedByOwnLead };
+}
+
+GameStructure structureFor(unsigned int i)
+{
+    return i % 2 == 0 ? GameStructure::S_181 : GameStructure::S_818;
+}
+
+std::string describe(const char* strategy, const StandbyGame& game)
+{
+    return std::string(strategy) + ", players = " + std::to_string(game.playerCount) + ", seat "
+           + std::to_string(game.seat) + ", taking over at " + nameOf(game.moment) + ", seed = "
+           + std::to_string(game.seed) + (game.structure == GameStructure::S_818 ? ", S_818" : ", S_181");
 }
 
 void requireTakeoverPlayedOut(const StandbyResult& result)
@@ -281,28 +379,33 @@ void requireTakeoverPlayedOut(const StandbyResult& result)
     REQUIRE(result.status == GameStatus::Finished);
 }
 
-void runCyborgStandby(unsigned int playerCount, unsigned int seat, Moment moment, std::uint32_t seed)
+// Returns how many cashing runs the seat's own player ended by leading.
+unsigned int runCyborgStandby(const StandbyGame& game)
 {
-    INFO("Cyborg, players = " << playerCount << ", seat " << seat << ", taking over at " << nameOf(moment)
-         << ", seed = " << seed);
+    INFO(describe("Cyborg", game));
 
     CyborgStrategy standIn;
 
-    requireTakeoverPlayedOut(playWithStandby(standIn, standIn.getMemory(), playerCount, seat, moment, seed));
+    const StandbyResult result = playWithStandby(standIn, standIn.getMemory(), game, [&standIn]
+    {
+        return standIn.getCashingSuit().has_value();
+    });
+
+    requireTakeoverPlayedOut(result);
 
     // Zero says its memory agreed with every position it was shown after the takeover.
     REQUIRE(standIn.getFallbacksTaken() == 0);
+
+    return result.runsEndedByOwnLead;
 }
 
-void runReckonerStandby(reckoner::ReckonerPreset preset, const char* presetName, unsigned int playerCount,
-                        unsigned int seat, Moment moment, std::uint32_t seed)
+void runReckonerStandby(reckoner::ReckonerPreset preset, const char* presetName, const StandbyGame& game)
 {
-    INFO("Reckoner " << presetName << ", players = " << playerCount << ", seat " << seat << ", taking over at "
-         << nameOf(moment) << ", seed = " << seed);
+    INFO(describe(presetName, game));
 
-    ReckonerStrategy standIn(preset, seed);
+    ReckonerStrategy standIn(preset, game.seed);
 
-    requireTakeoverPlayedOut(playWithStandby(standIn, standIn.getTracker(), playerCount, seat, moment, seed));
+    requireTakeoverPlayedOut(playWithStandby(standIn, standIn.getTracker(), game));
 }
 
 // Every bid and card of a game, in order, to compare two games move for move.
@@ -361,7 +464,7 @@ Trace playStandingIn(Strategy& standIn, const common::RoundMemory& memory, unsig
 
     auto own = std::make_unique<AiMoveProvider>(std::make_unique<RandomCardStrategy>(seed));
     setup.seats[seat].moveProvider = std::make_unique<StandbyProvider>(engine, Seat{seat}, std::move(own), standIn,
-                                                                       memory, Moment::Any, 0);
+                                                                       memory, Moment::First, seed);
 
     engine.start(std::move(setup));
     engine.run();
@@ -380,7 +483,8 @@ TEST_CASE("A Cyborg stand-in takes a seat over at any moment and plays the game 
         for(unsigned int i = 0 ; i < std::size(kEveryMoment) ; i++)
         {
             for(std::uint32_t seed = 1 ; seed <= 2 ; seed++)
-                runCyborgStandby(playerCount, (i + seed) % playerCount, kEveryMoment[i], seed * 100 + playerCount);
+                runCyborgStandby({ playerCount, (i + seed) % playerCount, kEveryMoment[i], seed * 100 + playerCount,
+                                   structureFor(seed) });
         }
     }
 }
@@ -392,8 +496,9 @@ TEST_CASE("A Reckoner Alpha stand-in takes a seat over at any moment and plays t
         for(unsigned int i = 0 ; i < std::size(kEveryMoment) ; i++)
         {
             for(std::uint32_t seed = 1 ; seed <= 2 ; seed++)
-                runReckonerStandby(reckoner::ReckonerPreset::Alpha, "Alpha", playerCount, (i + seed) % playerCount,
-                                   kEveryMoment[i], seed * 100 + playerCount);
+                runReckonerStandby(reckoner::ReckonerPreset::Alpha, "Alpha",
+                                   { playerCount, (i + seed) % playerCount, kEveryMoment[i], seed * 100 + playerCount,
+                                     structureFor(seed) });
         }
     }
 }
@@ -403,8 +508,8 @@ TEST_CASE("A Reckoner Beta stand-in takes a seat over at any moment and plays th
     for(unsigned int i = 0 ; i < std::size(kEveryMoment) ; i++)
     {
         const unsigned int playerCount = 3 + i % 4;
-        runReckonerStandby(reckoner::ReckonerPreset::Beta, "Beta", playerCount, (i + 1) % playerCount,
-                           kEveryMoment[i], 300 + i);
+        runReckonerStandby(reckoner::ReckonerPreset::Beta, "Beta",
+                           { playerCount, (i + 1) % playerCount, kEveryMoment[i], 300 + i, structureFor(i) });
     }
 }
 
@@ -414,9 +519,37 @@ TEST_CASE("Reckoner Gamma and Delta stand-ins take a seat over at any moment and
 {
     for(unsigned int i = 0 ; i < std::size(kEveryMoment) ; i++)
     {
-        runReckonerStandby(reckoner::ReckonerPreset::Gamma, "Gamma", 2, i % 2, kEveryMoment[i], 400 + i);
-        runReckonerStandby(reckoner::ReckonerPreset::Delta, "Delta", 2, (i + 1) % 2, kEveryMoment[i], 500 + i);
+        runReckonerStandby(reckoner::ReckonerPreset::Gamma, "Gamma",
+                           { 2, i % 2, kEveryMoment[i], 400 + i, structureFor(i) });
+        runReckonerStandby(reckoner::ReckonerPreset::Delta, "Delta",
+                           { 2, (i + 1) % 2, kEveryMoment[i], 500 + i, structureFor(i + 1) });
     }
+}
+
+// A move made for an idle player, then the player again: the seat changes hands many times.
+TEST_CASE("A Cyborg sharing a seat with its player never keeps a run its player ended", "[standby][cyborg]")
+{
+    unsigned int runsEnded = 0;
+
+    for(unsigned int playerCount = 2 ; playerCount <= 6 ; playerCount++)
+    {
+        for(std::uint32_t seed = 1 ; seed <= 4 ; seed++)
+            runsEnded += runCyborgStandby({ playerCount, seed % playerCount, Moment::Shared, seed * 700 + playerCount,
+                                            structureFor(seed) });
+    }
+
+    // Without a run for the player to end, the check at each decision would test nothing.
+    REQUIRE(runsEnded > 0);
+}
+
+TEST_CASE("A Reckoner sharing a seat with its player plays the game out", "[standby][reckoner]")
+{
+    for(unsigned int playerCount = 2 ; playerCount <= 6 ; playerCount++)
+        runReckonerStandby(reckoner::ReckonerPreset::Alpha, "Alpha",
+                           { playerCount, (playerCount + 1) % playerCount, Moment::Shared, 800 + playerCount,
+                             structureFor(playerCount) });
+
+    runReckonerStandby(reckoner::ReckonerPreset::Beta, "Beta", { 4, 2, Moment::Shared, 900, GameStructure::S_181 });
 }
 
 TEST_CASE("A Cyborg standing in from the first decision plays the game a seated Cyborg plays", "[standby][cyborg]")

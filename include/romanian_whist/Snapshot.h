@@ -43,8 +43,8 @@ struct SeatSnapshot
 };
 
 // The game as one viewer may see it, by value, so it can be handed to another thread or sent
-// to another machine. Every member is copyable and default-constructible, which is why the
-// seats in it are optionals: Seat has no default constructor.
+// to another machine. It is copyable and default-constructible, and Seat has no default
+// constructor, so a seat held directly in it is an optional.
 struct GameSnapshot
 {
     // Who this was built for. Empty for a spectator, who sees no hand at all.
@@ -63,7 +63,7 @@ struct GameSnapshot
 
     RoundType roundType = RoundType::Normal;
 
-    // Empty in 8-card rounds.
+    // Empty in 8-card rounds, and before a round is dealt.
     std::optional<Card> trump;
 
     // Engaged in every snapshot.

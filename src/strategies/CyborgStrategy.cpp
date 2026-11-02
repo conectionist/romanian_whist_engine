@@ -273,6 +273,8 @@ void CyborgStrategy::noteLead(const PlayContext& context, const Card& played, bo
     if(!context.playedCards.empty())
         return;
 
+    ownLead = played;
+
     // A lead that was not a cash ENDS the run: once this hand leads something
     // else, there is no suit it is part-way through. Leaving the old suit in
     // place is what let a junk lead redirect a later TAKE lead away from §6.1's
@@ -382,7 +384,7 @@ void CyborgStrategy::onBetPlaced(const GameEngine& /*engine*/, Seat seat, unsign
 
 void CyborgStrategy::onCardPlayed(const GameEngine& /*engine*/, Seat seat, const Card& card)
 {
-    memory.recordCardPlayed(seat.index, card);
+    notePlayed(seat.index, card);
 }
 
 void CyborgStrategy::onTrickWon(const GameEngine& /*engine*/, Seat winner,
@@ -406,6 +408,21 @@ void CyborgStrategy::onBid(unsigned int seat, unsigned int value)
 
 void CyborgStrategy::onCardPlayed(unsigned int seat, const Card& card)
 {
+    notePlayed(seat, card);
+}
+
+void CyborgStrategy::notePlayed(unsigned int seat, const Card& card)
+{
+    if(seat == memory.mySeat)
+    {
+        // Read before the memory records the card, while an empty table still means a lead. A
+        // stand-in sharing the seat sees its player's leads only here.
+        if(memory.currentTrickCards.empty() && ownLead != card)
+            cashingSuit = std::nullopt;
+
+        ownLead.reset();
+    }
+
     memory.recordCardPlayed(seat, card);
 }
 

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -73,9 +74,8 @@ std::string describe(const char* what, std::optional<Seat> viewer,
     return text.str();
 }
 
-// Returns what is wrong with one viewer's snapshot, or an empty string. One assertion per
-// snapshot rather than one per field keeps a few million checks fast enough to run on every
-// build.
+// Returns what is wrong with one viewer's snapshot, or an empty string, so a passing snapshot
+// costs no assertion at all. That keeps a few million checks fast enough to run on every build.
 std::string findProblem(const GameEngine& engine, std::optional<Seat> viewer)
 {
     const GameSnapshot snapshot = snapshotFrom(engine, viewer);
@@ -150,7 +150,13 @@ class LeakChecker : public IGameObserver
 public:
     bool sawForehead = false;
     bool sawHidden = false;
+    bool sawStopped = false;
     unsigned int snapshotsChecked = 0;
+
+    // Set to stop the game, after this many callbacks or at a Forehead round's deal.
+    GameEngine* stopping = nullptr;
+    std::optional<unsigned int> stopAfter;
+    bool stopInForehead = false;
 
     void onGameStarted(const GameEngine& engine) override { check(engine); }
     void onRoundStarted(const GameEngine& engine) override { check(engine); }
@@ -164,11 +170,24 @@ public:
     void onRoundScored(const GameEngine& engine) override { check(engine); }
     void onRoundComplete(const GameEngine& engine) override { check(engine); }
     void onGameOver(const GameEngine& engine) override { check(engine); }
-    void onGameStopped(const GameEngine& engine) override { check(engine); }
+    void onGameStopped(const GameEngine& engine) override
+    {
+        sawStopped = true;
+        check(engine);
+    }
 
 private:
+    unsigned int callbacks = 0;
+
     void check(const GameEngine& engine)
     {
+        callbacks++;
+
+        if(stopping && ((stopAfter && callbacks == *stopAfter)
+                        || (stopInForehead && engine.getCurrentRoundType() == RoundType::Forehead
+                            && engine.getPhase() == GamePhase::Betting)))
+            stopping->requestStop();
+
         // Counted only while a round is dealt, so a pass means those rounds' hands were checked.
         if(engine.getPhase() == GamePhase::Betting || engine.getPhase() == GamePhase::Playing)
         {
@@ -600,6 +619,43 @@ TEST_CASE("No snapshot holds a hand its viewer may not see", "[snapshot][propert
                     REQUIRE(checker.sawHidden);
                     REQUIRE(checker.snapshotsChecked > 0);
                 }
+            }
+        }
+    }
+}
+
+// A table that closes stops its game, so a stop has to leak nothing either: at a random callback,
+// and during a Forehead round's bidding, while every hand is still dealt.
+TEST_CASE("No snapshot of a stopped game holds a hand its viewer may not see", "[snapshot][property]")
+{
+    for(unsigned int playerCount = 2 ; playerCount <= 6 ; playerCount++)
+    {
+        for(const GameStructure structure : { GameStructure::S_181, GameStructure::S_818 })
+        {
+            for(std::uint32_t seed = 0 ; seed < 5 ; seed++)
+            {
+                const bool inForehead = seed == 0;
+
+                INFO("players = " << playerCount << ", S_818 = " << (structure == GameStructure::S_818)
+                     << ", seed = " << seed << ", stopped in a Forehead round = " << inForehead);
+
+                LeakChecker checker;
+                GameEngine engine;
+
+                checker.stopping = &engine;
+                checker.stopInForehead = inForehead;
+
+                // Every game makes more than 400 callbacks: two seats make about 600.
+                if(!inForehead)
+                    checker.stopAfter = 1 + std::mt19937(seed * 31 + playerCount)() % 400;
+
+                engine.addObserver(&checker);
+                engine.start(buildSetup(structure, randomProviders(playerCount, seed), seed, true, false));
+                engine.run();
+
+                REQUIRE(engine.getStatus() == GameStatus::Stopped);
+                REQUIRE(checker.sawStopped);
+                REQUIRE(checker.sawForehead == inForehead);
             }
         }
     }

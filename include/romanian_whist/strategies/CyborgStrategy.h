@@ -59,6 +59,10 @@ private:
     // when things are fine" from an assumption into a test.
     std::size_t fallbacksTaken = 0;
 
+    // The lead this strategy chose, until the seat plays it. A lead from the seat that differs
+    // was made by whoever else plays the seat, and has to end the cashing run all the same.
+    std::optional<Card> ownLead;
+
 public:
     explicit CyborgStrategy(cyborg::CyborgKnobs knobs = {});
 
@@ -139,6 +143,9 @@ private:
     // says whether that card was chosen as a cash; a lead that was not one ends
     // the run, so it clears the suit rather than leaving it to mislead §6.1.
     void noteLead(const PlayContext& context, const Card& played, bool cashing);
+
+    // Records a card in the memory. Both onCardPlayed() overloads come through here.
+    void notePlayed(unsigned int seat, const Card& card);
 };
 
 // Builds a Cyborg seat and registers it as an observer of `engine`, which must
