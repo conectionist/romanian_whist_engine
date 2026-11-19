@@ -89,10 +89,10 @@ Releases are tagged, so pin one rather than tracking a branch:
 ```bash
 cd libs/RomanianWhistEngine
 git fetch --tags
-git checkout v5.1.0
+git checkout v5.2.0
 cd ../..
 git add libs/RomanianWhistEngine
-git commit -m "Update Romanian Whist engine to 5.1.0"
+git commit -m "Update Romanian Whist engine to 5.2.0"
 ```
 
 `git pull origin master` also works if you would rather track the tip. Either way, read

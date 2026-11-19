@@ -3,7 +3,11 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
-## Unreleased
+## 5.2.0
+
+**The streak bonus and penalty pay every fifth round, not only the first.** A run of five exact
+bids, or of five misses, now starts over once it pays, so a tenth, fifteenth, … in a row pays again.
+The counters read 0 to 4 after scoring. One addition, `StreakLength`, and no existing call changes.
 
 ### Added
 
