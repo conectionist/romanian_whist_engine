@@ -177,17 +177,17 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding, pinne
     // (A = section 4 bidding, B = heuristic bidding):
     //
     //     players     A        B      A - B
-    //        2      29.9     19.4    +10.5
-    //        3      54.9     46.2     +8.8
-    //        4      73.0     67.2     +5.9
-    //        5      90.9     85.3     +5.6
-    //        6     108.0    102.9     +5.1
+    //        2      29.6     19.2    +10.4
+    //        3      54.7     46.1     +8.6
+    //        4      73.0     67.2     +5.8
+    //        5      90.9     85.4     +5.5
+    //        6     108.0    103.0     +5.0
     constexpr std::array<Expected, 5> expected{{
-        {2, 4790, 3106},
-        {3, 13184, 11080},
-        {4, 23366, 21491},
-        {5, 36376, 34137},
-        {6, 51816, 49386},
+        {2, 4730, 3066},
+        {3, 13124, 11060},
+        {4, 23346, 21501},
+        {5, 36356, 34147},
+        {6, 51856, 49456},
     }};
 
     checkPins(knobsFor(false, true), knobsFor(true, true), expected);
@@ -213,17 +213,17 @@ TEST_CASE("Cyborg tournament: section 6 play against heuristic play, pinned per 
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      32.8     21.6    +11.2
-    //        3      56.0     52.0     +4.0
+    //        2      32.5     21.1    +11.5
+    //        3      55.9     51.9     +4.0
     //        4      76.3     72.6     +3.7
-    //        5      89.8     90.3     -0.5
-    //        6     109.0    108.8     +0.1
+    //        5      89.8     90.3     -0.4
+    //        6     109.2    109.0     +0.2
     constexpr std::array<Expected, 5> expected{{
-        {2, 5248, 3454},
-        {3, 13448, 12478},
-        {4, 24415, 23236},
-        {5, 35903, 36103},
-        {6, 52296, 52245},
+        {2, 5208, 3374},
+        {3, 13418, 12448},
+        {4, 24405, 23236},
+        {5, 35933, 36103},
+        {6, 52396, 52305},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(false, true), expected);
@@ -247,17 +247,17 @@ TEST_CASE("Cyborg tournament: section 4 bidding against heuristic bidding under 
     // Seeds 30000..30039. Average points per game when pinned:
     //
     //     players     A        B      A - B
-    //        2      33.0     12.5    +20.5
-    //        3      55.8     45.2    +10.6
+    //        2      32.6     11.3    +21.3
+    //        3      55.8     45.0    +10.8
     //        4      75.5     68.1     +7.4
     //        5      90.6     83.3     +7.3
-    //        6     108.5    103.5     +5.1
+    //        6     108.7    103.8     +4.9
     constexpr std::array<Expected, 5> expected{{
-        {2, 5276, 1994},
-        {3, 13390, 10838},
-        {4, 24163, 21801},
+        {2, 5216, 1814},
+        {3, 13390, 10798},
+        {4, 24153, 21801},
         {5, 36242, 33305},
-        {6, 52097, 49664},
+        {6, 52157, 49804},
     }};
 
     checkPins(knobsFor(false, false), knobsFor(true, false), expected);

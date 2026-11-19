@@ -124,7 +124,7 @@ TEST_CASE("Scoreboard streaks", "[scoreboard]")
             scoreboard.incrementCurrentRound();
         }
 
-        REQUIRE(players.at(0).getConsecutiveWins() == 5);
+        REQUIRE(players.at(0).getConsecutiveWins() == 0);
     }
 
     SECTION("five consecutive misses subtract 10 on the fifth")
@@ -155,7 +155,68 @@ TEST_CASE("Scoreboard streaks", "[scoreboard]")
             scoreboard.incrementCurrentRound();
         }
 
-        REQUIRE(players.at(0).getConsecutiveLosses() == 5);
+        REQUIRE(players.at(0).getConsecutiveLosses() == 0);
+    }
+
+    SECTION("ten consecutive exact hits award +10 twice")
+    {
+        int previousTotal = players.at(0).getTotalScore();
+        int counted = 0;
+
+        while(counted < 10)
+        {
+            Round& round = scoreboard.getCurrentRound();
+            const unsigned int tricks = round.getTrickCount();
+            round.setBet(a, 0);
+            round.setBet(b, tricks);
+            awardTricks(round, b, tricks);
+
+            scoreboard.calculateScores(players);
+            scoreboard.commitRoundScores(players);
+
+            const int delta = players.at(0).getTotalScore() - previousTotal;
+            previousTotal = players.at(0).getTotalScore();
+
+            if(tricks != 1)
+            {
+                counted++;
+                REQUIRE(delta == (counted % 5 == 0 ? 15 : 5));
+                REQUIRE(players.at(0).getConsecutiveWins() == static_cast<unsigned int>(counted % 5));
+            }
+
+            scoreboard.incrementCurrentRound();
+        }
+    }
+
+    SECTION("ten consecutive misses subtract 10 twice")
+    {
+        int previousTotal = players.at(0).getTotalScore();
+        int counted = 0;
+
+        while(counted < 10)
+        {
+            Round& round = scoreboard.getCurrentRound();
+            const unsigned int tricks = round.getTrickCount();
+            round.setBet(a, 0);
+            round.setBet(b, tricks - 1);
+            awardTricks(round, a, 1);   // a bid 0 and took 1: a miss, every round
+            awardTricks(round, b, tricks - 1);
+
+            scoreboard.calculateScores(players);
+            scoreboard.commitRoundScores(players);
+
+            const int delta = players.at(0).getTotalScore() - previousTotal;
+            previousTotal = players.at(0).getTotalScore();
+
+            if(tricks != 1)
+            {
+                counted++;
+                REQUIRE(delta == (counted % 5 == 0 ? -11 : -1));
+                REQUIRE(players.at(0).getConsecutiveLosses() == static_cast<unsigned int>(counted % 5));
+            }
+
+            scoreboard.incrementCurrentRound();
+        }
     }
 }
 

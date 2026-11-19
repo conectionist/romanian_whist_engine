@@ -204,11 +204,18 @@ void ReckonerTracker::recordRoundEnd(const std::vector<int>& /*roundScores*/, co
         {
             myConsecutiveWins++;
             myConsecutiveLosses = 0;
+
+            // Mirrors the scoreboard, which restarts a run once it pays out
+            if(myConsecutiveWins == 5)
+                myConsecutiveWins = 0;
         }
         else
         {
             myConsecutiveLosses++;
             myConsecutiveWins = 0;
+
+            if(myConsecutiveLosses == 5)
+                myConsecutiveLosses = 0;
         }
     }
 

@@ -171,10 +171,11 @@ void Scoreboard::calculateScores(PlayerList& players)
                 player.incrementConsecutiveWins();
                 player.resetConsecutiveLosses();
                 
-                // Check for 5 consecutive wins
+                // The run starts over once it pays, so every fifth hit in a row earns the bonus
                 if(player.getConsecutiveWins() == 5)
                 {
-                    player.addToScore(10); // Bonus for 5 consecutive wins
+                    player.addToScore(10);
+                    player.resetConsecutiveWins();
                 }
             }
             else
@@ -182,10 +183,11 @@ void Scoreboard::calculateScores(PlayerList& players)
                 player.incrementConsecutiveLosses();
                 player.resetConsecutiveWins();
                 
-                // Check for 5 consecutive losses
+                // The run starts over once it costs, so every fifth miss in a row pays the penalty
                 if(player.getConsecutiveLosses() == 5)
                 {
-                    player.addToScore(-10); // Penalty for 5 consecutive losses
+                    player.addToScore(-10);
+                    player.resetConsecutiveLosses();
                 }
             }
         }
