@@ -9,6 +9,10 @@
 
 namespace romanian_whist
 {
+// Exact bids, or misses, in a row that pay +10 or -10. The run then starts over,
+// so the counters never read more than StreakLength - 1 once a round is scored.
+inline constexpr unsigned int StreakLength = 5;
+
 enum class GameStructure
 {
     S_181,

@@ -1,5 +1,6 @@
 #include <romanian_whist/strategies/reckoner/RolloutEngine.h>
 #include <romanian_whist/strategies/reckoner/ReckonerKnobs.h>
+#include <romanian_whist/Scoreboard.h>
 
 #include <algorithm>
 #include <cmath>
@@ -59,12 +60,12 @@ float RolloutEngine::scoreUtility(unsigned int myTricks,
     {
         if(myTricks == static_cast<unsigned int>(myBid))
         {
-            if(tracker.myConsecutiveWins + 1 == 5)
+            if(tracker.myConsecutiveWins + 1 == StreakLength)
                 own += 10.0f;
         }
         else
         {
-            if(tracker.myConsecutiveLosses + 1 == 5)
+            if(tracker.myConsecutiveLosses + 1 == StreakLength)
                 own -= 10.0f;
         }
     }

@@ -171,10 +171,10 @@ void Scoreboard::calculateScores(PlayerList& players)
                 player.incrementConsecutiveWins();
                 player.resetConsecutiveLosses();
                 
-                // Check for 5 consecutive wins
-                if(player.getConsecutiveWins() == 5)
+                if(player.getConsecutiveWins() == StreakLength)
                 {
-                    player.addToScore(10); // Bonus for 5 consecutive wins
+                    player.addToScore(10);
+                    player.resetConsecutiveWins();
                 }
             }
             else
@@ -182,10 +182,10 @@ void Scoreboard::calculateScores(PlayerList& players)
                 player.incrementConsecutiveLosses();
                 player.resetConsecutiveWins();
                 
-                // Check for 5 consecutive losses
-                if(player.getConsecutiveLosses() == 5)
+                if(player.getConsecutiveLosses() == StreakLength)
                 {
-                    player.addToScore(-10); // Penalty for 5 consecutive losses
+                    player.addToScore(-10);
+                    player.resetConsecutiveLosses();
                 }
             }
         }

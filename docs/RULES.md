@@ -93,6 +93,9 @@ never disagree with the winner the engine eventually declares.
 | 5th consecutive exact bid | `+10` |
 | 5th consecutive miss | `-10` |
 
+A streak starts over once it pays out, so the 10th, 15th, … consecutive exact bid earns another
+`+10`, and the 10th, 15th, … consecutive miss another `-10`.
+
 **One-card rounds are excluded from the streak counters**, in both directions: they neither
 advance a streak nor break one.
 

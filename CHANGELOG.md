@@ -3,6 +3,27 @@
 This project follows [Semantic Versioning](https://semver.org/). The version lives in
 `CMakeLists.txt` and reaches consumers as `romanian_whist::VersionString`.
 
+## Unreleased
+
+### Added
+
+- **`romanian_whist::StreakLength`** in `<romanian_whist/Scoreboard.h>`: the run of exact bids, or
+  of misses, that pays `+10` or `-10`. The scoreboard and `ReckonerStrategy` both read it.
+
+### Fixed
+
+- **A streak pays out every fifth round, not only the first time.** `Scoreboard::calculateScores`
+  gave `+10` when a run of exact bids reached 5 but never reset the counter, so a sixth, seventh
+  and later hit carried on counting and the tenth earned nothing. The same held for `-10` on
+  misses. The counter now starts over once it pays.
+  - `Player::getConsecutiveWins()` and `getConsecutiveLosses()` read 0 right after a payout and
+    never exceed 4 after scoring, so a UI showing the run shows progress towards the next one.
+  - `ReckonerStrategy`'s tracker counts the same way, so its lookahead sees the second bonus.
+  - The pinned totals in `CyborgTournamentTests.cpp` and `ReckonerStrategyTests.cpp` move: every
+    change is a multiple of 10. In `ReckonerStrategyTests.cpp` a LowRisk seat moved in the 2-player
+    game and the Reckoner itself (seat 0) in the 6-player game. Its lookahead now values the later
+    payouts too, so some of its choices may differ.
+
 ## 5.1.0
 
 **A snapshot of the game for one viewer, a promise about stand-ins, and a new license.** The first

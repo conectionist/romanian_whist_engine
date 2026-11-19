@@ -1,5 +1,7 @@
 #include <romanian_whist/strategies/reckoner/ReckonerTracker.h>
 
+#include <romanian_whist/Scoreboard.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -204,11 +206,18 @@ void ReckonerTracker::recordRoundEnd(const std::vector<int>& /*roundScores*/, co
         {
             myConsecutiveWins++;
             myConsecutiveLosses = 0;
+
+            // A run starts over once it pays, so the lookahead sees every fifth hit as a bonus
+            if(myConsecutiveWins == StreakLength)
+                myConsecutiveWins = 0;
         }
         else
         {
             myConsecutiveLosses++;
             myConsecutiveWins = 0;
+
+            if(myConsecutiveLosses == StreakLength)
+                myConsecutiveLosses = 0;
         }
     }
 
