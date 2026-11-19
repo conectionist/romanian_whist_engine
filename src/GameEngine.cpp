@@ -606,10 +606,9 @@ void GameEngine::calculateScores()
 
     // Scoreboard::calculateScores accumulates into currentRoundScore and steps
     // the streak counters, neither with a guard - so a second call doubles the
-    // round's points AND double-increments the streaks, walking a player on
-    // their fifth consecutive hit straight from 4 to 6 so the == 5 bonus never
-    // fires at all. That missing +-10 reads as a scoring-rule bug rather than
-    // as a double call, and no assertion about round scores would see it. So
+    // round's points and steps each streak twice, which pays a +-10 a round
+    // early. That stray +-10 reads as a scoring-rule bug rather than as a
+    // double call, and no assertion about round scores would see it. So
     // gate the whole function on the phase, not the arithmetic.
     //
     // Phase 2b of ENGINE_V4_PLAN.md tightens this to `phase != Playing` once

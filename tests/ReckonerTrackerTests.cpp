@@ -3,6 +3,8 @@
 #include <romanian_whist/strategies/reckoner/CardMask.h>
 #include <romanian_whist/strategies/reckoner/ReckonerTracker.h>
 
+#include <vector>
+
 using namespace romanian_whist;
 using namespace romanian_whist::reckoner;
 
@@ -84,4 +86,40 @@ TEST_CASE("ReckonerTracker: rank-gap constraint recording", "[reckoner][tracker]
 
     const CardId nineSpades = cardToId(Card{Rank::Nine, Suit::Spades}, n);
     REQUIRE((c.excluded & cardBit(nineSpades)) != 0);
+}
+
+TEST_CASE("ReckonerTracker: a streak starts over once it pays, as the scoreboard's does", "[reckoner][tracker]")
+{
+    ReckonerTracker tracker;
+    tracker.playerCount = 2;
+    tracker.roundTrickCount = 3;
+    tracker.mySeat = 0;
+
+    const std::vector<int> totals{0, 0};
+
+    SECTION("ten exact bids in a row")
+    {
+        tracker.bids[0] = 1;
+        tracker.won[0] = 1;
+
+        for(unsigned int i = 1 ; i <= 10 ; i++)
+        {
+            tracker.recordRoundEnd({}, totals);
+            REQUIRE(tracker.myConsecutiveWins == i % 5);
+            REQUIRE(tracker.myConsecutiveLosses == 0);
+        }
+    }
+
+    SECTION("ten misses in a row")
+    {
+        tracker.bids[0] = 0;
+        tracker.won[0] = 1;
+
+        for(unsigned int i = 1 ; i <= 10 ; i++)
+        {
+            tracker.recordRoundEnd({}, totals);
+            REQUIRE(tracker.myConsecutiveLosses == i % 5);
+            REQUIRE(tracker.myConsecutiveWins == 0);
+        }
+    }
 }

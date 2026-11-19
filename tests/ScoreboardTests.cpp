@@ -165,6 +165,7 @@ TEST_CASE("Scoreboard streaks", "[scoreboard]")
 
         while(counted < 10)
         {
+            REQUIRE(scoreboard.getCurrentRoundIndex() < scoreboard.getRoundCount());
             Round& round = scoreboard.getCurrentRound();
             const unsigned int tricks = round.getTrickCount();
             round.setBet(a, 0);
@@ -195,6 +196,7 @@ TEST_CASE("Scoreboard streaks", "[scoreboard]")
 
         while(counted < 10)
         {
+            REQUIRE(scoreboard.getCurrentRoundIndex() < scoreboard.getRoundCount());
             Round& round = scoreboard.getCurrentRound();
             const unsigned int tricks = round.getTrickCount();
             round.setBet(a, 0);

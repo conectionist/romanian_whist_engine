@@ -5,6 +5,11 @@ This project follows [Semantic Versioning](https://semver.org/). The version liv
 
 ## Unreleased
 
+### Added
+
+- **`romanian_whist::StreakLength`** in `<romanian_whist/Scoreboard.h>`: the run of exact bids, or
+  of misses, that pays `+10` or `-10`. The scoreboard and `ReckonerStrategy` both read it.
+
 ### Fixed
 
 - **A streak pays out every fifth round, not only the first time.** `Scoreboard::calculateScores`
@@ -14,8 +19,9 @@ This project follows [Semantic Versioning](https://semver.org/). The version liv
   - `Player::getConsecutiveWins()` and `getConsecutiveLosses()` read 0 right after a payout and
     never exceed 4 after scoring, so a UI showing the run shows progress towards the next one.
   - `ReckonerStrategy`'s tracker counts the same way, so its lookahead sees the second bonus.
-  - The pinned totals in `CyborgTournamentTests.cpp` and `ReckonerStrategyTests.cpp` move by the
-    extra payouts: every change is a multiple of 10.
+  - The pinned totals in `CyborgTournamentTests.cpp` and `ReckonerStrategyTests.cpp` move: every
+    change is a multiple of 10. In `ReckonerStrategyTests.cpp` the seat that moved is the Reckoner
+    (seat 0), whose lookahead now values the later payouts too.
 
 ## 5.1.0
 

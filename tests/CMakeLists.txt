@@ -82,9 +82,9 @@ target_compile_definitions(romanian_whist_engine_tests PRIVATE
 # breaks a tie the other way and the whole game diverges from there. It is not a
 # bug in Reckoner; there is simply no portable answer to pin.
 #
-# Measured on CI run #19, same commit, same seed, 2 players S_181 seed 10:
+# One game, 2 players S_181 seed 10, built from one commit on each CI toolchain:
 #
-#     Linux   / GCC         { 76, -18 }   <- what the vectors are pinned to
+#     Linux   / GCC         { 76, -18 }
 #     macOS   / AppleClang   { 77, -18 }
 #     Windows / MSVC         { 61, -19 }
 #
