@@ -20,8 +20,9 @@ This project follows [Semantic Versioning](https://semver.org/). The version liv
     never exceed 4 after scoring, so a UI showing the run shows progress towards the next one.
   - `ReckonerStrategy`'s tracker counts the same way, so its lookahead sees the second bonus.
   - The pinned totals in `CyborgTournamentTests.cpp` and `ReckonerStrategyTests.cpp` move: every
-    change is a multiple of 10. In `ReckonerStrategyTests.cpp` the seat that moved is the Reckoner
-    (seat 0), whose lookahead now values the later payouts too.
+    change is a multiple of 10. In `ReckonerStrategyTests.cpp` a LowRisk seat moved in the 2-player
+    game and the Reckoner itself (seat 0) in the 6-player game. Its lookahead now values the later
+    payouts too, so some of its choices may differ.
 
 ## 5.1.0
 
